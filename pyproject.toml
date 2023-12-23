@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "omakase"
+version = "0.1.0"
+description = ""
+authors = ["Xavier Fontaine <xavier.fontainec@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+nicegui = "^1.4.6"
+pandas = "^2.1.4"
+fastapi = "^0.105.0"
+
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.12.1"
+pytest = "^7.4.3"
+flake8 = "^6.1.0"
+pre-commit = "^3.6.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
