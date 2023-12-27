@@ -1,10 +1,13 @@
 """User-related constants & utils"""
 from nicegui import app
 
-LOG_STATUS_KEY = "is_logged"
+AUTH_STATUS_KEY = "is_logged"
+USERNAME_KEY = "username"
 
 
 def init_user_storage() -> None:
     """Init user storage with default values"""
-    if LOG_STATUS_KEY not in app.storage.user:
-        app.storage.user[LOG_STATUS_KEY] = False
+    if AUTH_STATUS_KEY not in app.storage.user:
+        app.storage.user.update({AUTH_STATUS_KEY: False})
+    if USERNAME_KEY not in app.storage.user:
+        app.storage.user.update({USERNAME_KEY: None})
