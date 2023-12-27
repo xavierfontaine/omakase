@@ -3,6 +3,7 @@ Main page
 """
 from nicegui import ui
 
+from omakase.backend.login import Logger
 from omakase.backend.nicegui_utils import TabConf
 
 # Configure tabs
@@ -39,6 +40,7 @@ TAB_CONF_LIST: list[TabConf] = [
 
 
 def create_main_page():
+    # Getting user data (cookie-identified, stored on server)
     # Header
     with ui.header(elevated=True).classes("items-center justify-between"):
         # Containers for the tabs (i.e., the tab buttons, e.g. in a header)
@@ -49,19 +51,9 @@ def create_main_page():
                     label=tab_conf.label,
                     icon=tab_conf.icon,
                 )
-        # Login/logout button
-        # TODO: use ui.dialog https://nicegui.io/documentation/dialog
-        mydict = {"bla": True}
-
-        def up():
-            mydict["bla"] = not mydict["bla"]
-
-        ui.button(on_click=up, icon="search").bind_visibility_from(
-            target_object=mydict, target_name="bla"
-        )
-        ui.button(on_click=up, icon="auto_graph").bind_visibility_from(
-            target_object=mydict, target_name="bla", backward=lambda x: not x
-        )
+        # Login/logout
+        logger = Logger()
+        logger.make_button()
 
     # Containers for the contents
     with ui.tab_panels(tabs, value=TAB_CONF_LIST[0].name).classes("w-full"):

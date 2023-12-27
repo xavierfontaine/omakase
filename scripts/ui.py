@@ -1,12 +1,14 @@
 from nicegui import ui
 
-from omakase.backend import main as back_main
+from omakase.backend.main import create_main_page
+from omakase.backend.user import init_user_storage
 
 
 @ui.page("/")
 def entry_point() -> None:
     """Attach main page to /"""
-    back_main.create_main_page()
+    init_user_storage()
+    create_main_page()
 
 
 # TODO : add storage secret
