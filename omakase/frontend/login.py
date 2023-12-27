@@ -4,7 +4,7 @@ Login system
 from nicegui import app, ui
 
 from omakase.backend.auth import check_password
-from omakase.frontend.user import AUTH_STATUS_KEY, USERNAME_KEY
+from omakase.frontend.user import AUTH_STATUS_KEY, USERNAME_KEY, init_user_storage
 
 
 class Logger:
@@ -34,7 +34,9 @@ class Logger:
         self._dialog.open()
 
     def _on_logout_click(self) -> None:
-        app.storage.user.update({AUTH_STATUS_KEY: False})
+        app.storage.user.clear()
+        init_user_storage()
+        ui.update()
 
     def _display_dialog_content(self) -> ui.dialog:
         username_pwd = {"username": "", "password": ""}

@@ -1,17 +1,16 @@
 """
 Main page
 """
-from nicegui import ui
+from nicegui import app, ui
 
 from omakase.frontend.login import Logger
-from omakase.frontend.nicegui_utils import TabConf
+from omakase.frontend.tabs import StatsContent
+from omakase.frontend.tabs.utils import TabConf
+from omakase.frontend.user import AUTH_STATUS_KEY
 
 # Configure tabs
 STATS_TAB_CONF = TabConf(
-    name="stats",
-    label="Statistics",
-    icon="auto_graph",
-    content_generator=lambda: ui.label("bla"),
+    name="stats", label="Statistics", icon="auto_graph", content_generator=StatsContent
 )
 ADD_DOC_TAB_CONF = TabConf(
     name="add_doc",
@@ -33,9 +32,9 @@ EDIT_NOTES_TAB_CONF = TabConf(
 )
 TAB_CONF_LIST: list[TabConf] = [
     STATS_TAB_CONF,
-    ADD_DOC_TAB_CONF,
-    ADD_SMALLER_TAB_CONF,
-    EDIT_NOTES_TAB_CONF,
+    # ADD_DOC_TAB_CONF,
+    # ADD_SMALLER_TAB_CONF,
+    # EDIT_NOTES_TAB_CONF,
 ]
 
 
@@ -50,6 +49,9 @@ def create_main_page():
                     name=tab_conf.name,
                     label=tab_conf.label,
                     icon=tab_conf.icon,
+                ).bind_enabled_from(
+                    target_object=app.storage.user,
+                    target_name=AUTH_STATUS_KEY,
                 )
         # Login/logout
         logger = Logger()
@@ -59,7 +61,7 @@ def create_main_page():
     with ui.tab_panels(tabs, value=TAB_CONF_LIST[0].name).classes("w-full"):
         for tab_conf in TAB_CONF_LIST:
             with ui.tab_panel(tab_conf.name):
-                tab_conf.content_generator()
+                tab_conf.content_generator().display_tab_content()
 
     # # Header
     # with ui.header(elevated=True).classes("items-center justify-between"):
