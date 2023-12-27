@@ -1,7 +1,7 @@
 from nicegui import ui
 
-from omakase.backend.main import create_main_page
-from omakase.backend.user import init_user_storage
+from omakase.frontend.main import create_main_page
+from omakase.frontend.user import init_user_storage
 
 
 @ui.page("/")

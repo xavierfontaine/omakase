@@ -3,8 +3,8 @@ Main page
 """
 from nicegui import ui
 
-from omakase.backend.login import Logger
-from omakase.backend.nicegui_utils import TabConf
+from omakase.frontend.login import Logger
+from omakase.frontend.nicegui_utils import TabConf
 
 # Configure tabs
 STATS_TAB_CONF = TabConf(

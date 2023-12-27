@@ -3,7 +3,7 @@ Login system
 """
 from nicegui import app, ui
 
-from omakase.backend.user import LOG_STATUS_KEY
+from omakase.frontend.user import LOG_STATUS_KEY
 
 
 class Logger:
