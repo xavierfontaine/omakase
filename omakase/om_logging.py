@@ -16,4 +16,4 @@ logging_conf = logging_conf_toml[app_scope]
 logging_conf["sink"] = os.path.join(get_log_path(), logging_conf["sink"])
 
 # Configuring the logger
-logger = logger.add(**logging_conf)
+logger.add(**logging_conf)
