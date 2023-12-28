@@ -36,6 +36,47 @@ TAB_CONF_LIST: list[TabConf] = [
     # ADD_SMALLER_TAB_CONF,
     # EDIT_NOTES_TAB_CONF,
 ]
+#
+#
+# class MainPageTemplate(ABC):
+#     def __init__(self):
+#         """Template for creating the main page"""
+#         pass
+#
+#     def display_page(self):
+#         with ui.header(elevated=True).classes("items-center justify-between"):
+#             self._header_content()
+#
+#     @abstractmethod
+#     def _header_content(self):
+#         pass
+#
+#     @abstractmethod
+#     def _body_content(self):
+#         pass
+#
+#
+# class MainPageLogged(MainPageTemplate):
+#     def _header_content(self):
+#         with ui.tabs() as self._tabs:
+#             for tab_conf in TAB_CONF_LIST:
+#                 ui.tab(
+#                     name=tab_conf.name,
+#                     label=tab_conf.label,
+#                     icon=tab_conf.icon,
+#                 ).bind_enabled_from(
+#                     target_object=app.storage.user,
+#                     target_name=AUTH_STATUS_KEY,
+#                 )
+#         # Login/logout
+#         logger = Logger()
+#         logger.make_button()
+#
+#     def _body_content(self):
+#         with ui.tab_panels(self._tabs, value=TAB_CONF_LIST[0].name).classes("w-full"):
+#             for tab_conf in TAB_CONF_LIST:
+#                 with ui.tab_panel(tab_conf.name):
+#                     tab_conf.content_generator().display_tab_content()
 
 
 def create_main_page():
@@ -62,19 +103,3 @@ def create_main_page():
         for tab_conf in TAB_CONF_LIST:
             with ui.tab_panel(tab_conf.name):
                 tab_conf.content_generator().display_tab_content()
-
-    # # Header
-    # with ui.header(elevated=True).classes("items-center justify-between"):
-    #     # Statistics
-    #     ui.button(on_click=lambda: left_drawer.toggle(), icon="menu")
-    #     # Title
-    #     ui.label("OMAKASE")
-    #     # Logout
-    #     ui.button(
-    #         icon="logout"
-    #     )  # on_click=lambda: (app.storage.user.clear(), ui.open('/login')),
-    # # Drawer
-    # with ui.left_drawer().classes("bg-blue-100") as left_drawer:
-    #     ui.label("Side menu")
-    # # Displayed content
-    # # TODO
