@@ -10,6 +10,7 @@ python = "^3.11"
 nicegui = "^1.4.6"
 pandas = "^2.1.4"
 fastapi = "^0.105.0"
+loguru = "^0.7.2"
 
 
 [tool.poetry.group.dev.dependencies]

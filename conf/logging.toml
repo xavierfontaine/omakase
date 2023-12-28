@@ -1,0 +1,9 @@
+# Differentiated logging logic, one for each app scope.
+app_scope = "monoapp"  # set the app scope ; one of the below sections (typically,
+                       # 'website', 'anki_server'... and 'monoapp' if all is run
+                       # together)
+
+[monoapp]  # logger in mono-app mode
+sink="app.log"
+rotation="100 MB"
+level="INFO"

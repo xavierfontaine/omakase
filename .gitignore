@@ -8,3 +8,5 @@
 .nicegui/*
 data/
 !data/.gitkeep
+logs/
+!logs/.gitkeep
