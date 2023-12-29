@@ -16,7 +16,7 @@ class TabContent(ABC):
     def display_tab_content(self):
         """Display content of the tab"""
         if app.storage.user.get(AUTH_STATUS_KEY):
-            pass
+            self._display_if_logged()
         else:
             self._display_if_not_logged()
 

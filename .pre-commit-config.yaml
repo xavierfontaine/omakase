@@ -35,4 +35,4 @@ repos:
         entry: isort
         language: system
         require_serial: true
-        args: ['--check', '--profile black']
+        args: ['--profile=black', '--check']
