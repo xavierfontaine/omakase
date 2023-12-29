@@ -6,11 +6,13 @@ from nicegui import ui
 from omakase.backend.notes import ManipulateDecks
 from omakase.frontend.tabs.utils import TabContent
 from omakase.frontend.web_user import (
+    OM_USERNAME_DEFAULT,
+    OM_USERNAME_KEY,
+    point_to_web_user_data,
+)
+from omakase.backend.om_user import (
     LAST_SELECTED_DECK_DEFAULT,
     LAST_SELECTED_DECK_KEY,
-    USERNAME_DEFAULT,
-    USERNAME_KEY,
-    point_to_web_user_data,
 )
 from omakase.om_logging import logger
 
@@ -18,11 +20,11 @@ from omakase.om_logging import logger
 class EditNotesContent(TabContent):
     def __init__(self) -> None:
         self.web_user_data = point_to_web_user_data()
-        self.username = self.web_user_data.get(USERNAME_KEY)
+        self.username = self.web_user_data.get(OM_USERNAME_KEY)
         self.deck_manipulator = ManipulateDecks(om_username=self.username)
 
     def _user_is_logged(self) -> bool:
-        return self.username != USERNAME_DEFAULT
+        return self.username != OM_USERNAME_DEFAULT
 
     def _a_deck_exists(self) -> bool:
         return self.deck_manipulator.list_decks() != []

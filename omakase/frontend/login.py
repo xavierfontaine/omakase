@@ -7,10 +7,11 @@ from omakase.backend.auth import check_password
 from omakase.frontend.routing import ENTRY_ROUTES
 from omakase.frontend.web_user import (
     AUTH_STATUS_KEY,
-    USERNAME_KEY,
-    init_user_storage,
+    OM_USERNAME_KEY,
+    init_missing_web_user_storage,
     point_to_web_user_data,
 )
+from omakase.backend.om_user import init_missing_om_user_storage
 
 
 class Logger:
@@ -44,7 +45,7 @@ class Logger:
 
     def _on_logout_click(self) -> None:
         self.web_user_data.clear()
-        init_user_storage()
+        init_missing_web_user_storage()
         ui.open(ENTRY_ROUTES)
 
     def _display_dialog_content(self) -> ui.dialog:
@@ -69,10 +70,15 @@ class Logger:
     def _try_login(self, username: str, password: str) -> None:
         status = check_password(username=username, password=password)
         if status:
-            self.web_user_data.update({USERNAME_KEY: username, AUTH_STATUS_KEY: True})
-            # ui.notify("Login successful!")
-            self._dialog.close()
-            ui.open(ENTRY_ROUTES)
+            self._on_successful_login(username=username)
         else:
             ui.notify("Wrong username/password", color="negative")
         pass
+
+    def _on_successful_login(self, username: str):
+        """Mark web_user as logged as om_user, init his om_user data wherever necessary."""
+        self.web_user_data.update({OM_USERNAME_KEY: username, AUTH_STATUS_KEY: True})
+        # ui.notify("Login successful!")
+        self._dialog.close()
+        init_missing_om_user_storage(om_username=username)
+        ui.open(ENTRY_ROUTES)
