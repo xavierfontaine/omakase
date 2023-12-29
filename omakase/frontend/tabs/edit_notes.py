@@ -1,7 +1,7 @@
 """
 Statistics tab
 """
-from nicegui import app, ui
+from nicegui import ui
 
 from omakase.backend.notes import ManipulateDecks
 from omakase.frontend.tabs.utils import TabContent
@@ -10,13 +10,15 @@ from omakase.frontend.web_user import (
     LAST_SELECTED_DECK_KEY,
     USERNAME_DEFAULT,
     USERNAME_KEY,
+    point_to_web_user_data,
 )
 from omakase.om_logging import logger
 
 
 class EditNotesContent(TabContent):
     def __init__(self) -> None:
-        self.username = app.storage.user.get(USERNAME_KEY)
+        self.web_user_data = point_to_web_user_data()
+        self.username = self.web_user_data.get(USERNAME_KEY)
         self.deck_manipulator = ManipulateDecks(om_username=self.username)
 
     def _user_is_logged(self) -> bool:
@@ -28,12 +30,12 @@ class EditNotesContent(TabContent):
     def _sanity_last_used_deck_in_storage(self):
         """Handle the special cases where no deck name is stored in memory, or if that
         deck doesn't exist anymore"""
-        current_last_selected_deck = app.storage.user.get(LAST_SELECTED_DECK_KEY)
+        current_last_selected_deck = self.web_user_data.get(LAST_SELECTED_DECK_KEY)
         deck_list = self.deck_manipulator.list_decks()
         if (current_last_selected_deck == LAST_SELECTED_DECK_DEFAULT) | (
             current_last_selected_deck not in deck_list
         ):
-            app.storage.user.update({LAST_SELECTED_DECK_KEY: deck_list[0]})
+            self.web_user_data.update({LAST_SELECTED_DECK_KEY: deck_list[0]})
 
     def _display_if_logged(self) -> None:
         # If no user name, leave page blank
@@ -52,7 +54,7 @@ class EditNotesContent(TabContent):
         self._sanity_last_used_deck_in_storage()
         # Deck name selector. [Save/use the last] deck.
         ui.select(options=self.deck_manipulator.list_decks()).bind_value(
-            target_object=app.storage.user, target_name=LAST_SELECTED_DECK_KEY
+            target_object=self.web_user_data, target_name=LAST_SELECTED_DECK_KEY
         )
         # Select the card. Have filter systems with agrid.
         # TODO

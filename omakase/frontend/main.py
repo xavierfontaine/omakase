@@ -1,7 +1,7 @@
 """
 Main page
 """
-from nicegui import app, ui
+from nicegui import ui
 
 from omakase.frontend.login import Logger
 from omakase.frontend.tabs import (
@@ -11,7 +11,7 @@ from omakase.frontend.tabs import (
     StatsContent,
 )
 from omakase.frontend.tabs.utils import TabConf
-from omakase.frontend.web_user import AUTH_STATUS_KEY
+from omakase.frontend.web_user import AUTH_STATUS_KEY, point_to_web_user_data
 
 # Configure tabs
 STATS_TAB_CONF = TabConf(
@@ -45,6 +45,7 @@ TAB_CONF_LIST: list[TabConf] = [
 
 def create_main_page():
     # Getting user data (cookie-identified, stored on server)
+    web_user_data = point_to_web_user_data()
     # Header
     with ui.header(elevated=True).classes("items-center justify-between"):
         # Containers for the tabs (i.e., the tab buttons, e.g. in a header)
@@ -55,7 +56,7 @@ def create_main_page():
                     label=tab_conf.label,
                     icon=tab_conf.icon,
                 ).bind_enabled_from(
-                    target_object=app.storage.user,
+                    target_object=web_user_data,
                     target_name=AUTH_STATUS_KEY,
                 )
         # Login/logout
