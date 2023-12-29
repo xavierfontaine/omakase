@@ -11,7 +11,7 @@ from omakase.frontend.tabs import (
     StatsContent,
 )
 from omakase.frontend.tabs.utils import TabConf
-from omakase.frontend.user import AUTH_STATUS_KEY
+from omakase.frontend.web_user import AUTH_STATUS_KEY
 
 # Configure tabs
 STATS_TAB_CONF = TabConf(

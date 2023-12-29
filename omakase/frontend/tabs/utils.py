@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from nicegui import app, ui
 
-from omakase.frontend.user import AUTH_STATUS_KEY
+from omakase.frontend.web_user import AUTH_STATUS_KEY
 
 
 class TabContent(ABC):

@@ -5,7 +5,7 @@ from nicegui import app, ui
 
 from omakase.backend.auth import check_password
 from omakase.frontend.routing import ENTRY_ROUTES
-from omakase.frontend.user import AUTH_STATUS_KEY, USERNAME_KEY, init_user_storage
+from omakase.frontend.web_user import AUTH_STATUS_KEY, USERNAME_KEY, init_user_storage
 
 
 class Logger:

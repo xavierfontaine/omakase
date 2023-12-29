@@ -5,7 +5,7 @@ from nicegui import app, ui
 
 from omakase.backend.notes import ManipulateDecks
 from omakase.frontend.tabs.utils import TabContent
-from omakase.frontend.user import (
+from omakase.frontend.web_user import (
     LAST_SELECTED_DECK_DEFAULT,
     LAST_SELECTED_DECK_KEY,
     USERNAME_DEFAULT,
