@@ -7,7 +7,7 @@ from omakase.frontend.login import Logger
 from omakase.frontend.tabs import (
     AddDocContent,
     AddSmallerContent,
-    EditNotesContent,
+    EditDeckContent,
     StatsContent,
 )
 from omakase.frontend.tabs.utils import TabConf
@@ -29,17 +29,17 @@ ADD_SMALLER_TAB_CONF = TabConf(
     icon="record_voice_over",
     content_generator=AddSmallerContent,
 )
-EDIT_NOTES_TAB_CONF = TabConf(
-    name="edit_notes",
-    label="Edit notes",
+EDIT_DECK_TAB_CONF = TabConf(
+    name="edit_decks",
+    label="Edit decks",
     icon="mode_edit_outline",
-    content_generator=EditNotesContent,
+    content_generator=EditDeckContent,
 )
 TAB_CONF_LIST: list[TabConf] = [
     STATS_TAB_CONF,
     ADD_DOC_TAB_CONF,
     ADD_SMALLER_TAB_CONF,
-    EDIT_NOTES_TAB_CONF,
+    EDIT_DECK_TAB_CONF,
 ]
 
 
