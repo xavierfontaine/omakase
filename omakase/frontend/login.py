@@ -4,6 +4,7 @@ Login system
 from nicegui import ui
 
 from omakase.backend.auth import check_password
+from omakase.backend.om_user import init_missing_om_user_storage
 from omakase.frontend.routing import ENTRY_ROUTES
 from omakase.frontend.web_user import (
     AUTH_STATUS_KEY,
@@ -11,7 +12,6 @@ from omakase.frontend.web_user import (
     init_missing_web_user_storage,
     point_to_web_user_data,
 )
-from omakase.backend.om_user import init_missing_om_user_storage
 
 
 class Logger:
@@ -76,7 +76,9 @@ class Logger:
         pass
 
     def _on_successful_login(self, username: str):
-        """Mark web_user as logged as om_user, init his om_user data wherever necessary."""
+        """Mark web_user as logged as om_user, init his om_user data wherever
+        necessary.
+        """
         self.web_user_data.update({OM_USERNAME_KEY: username, AUTH_STATUS_KEY: True})
         # ui.notify("Login successful!")
         self._dialog.close()

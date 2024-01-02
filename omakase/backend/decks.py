@@ -3,7 +3,7 @@ Query and edit decks
 """
 from dataclasses import asdict, dataclass
 
-from omakase.exceptions import NoSuchDeckException
+from omakase.annotations import FieldName, FieldValue
 
 
 # ===============
@@ -16,8 +16,10 @@ class Card:
     sort_field_value: str
     due_value: int
     note_type: str
+    note_fields: dict[FieldName, FieldValue]
 
-    def to_dict(self):
+    def get_card_properties(self) -> dict:
+        """Return the card properties as a dict"""
         return asdict(self)
 
 
@@ -59,6 +61,7 @@ class ManipulateDecks:
                     sort_field_value="card1",
                     due_value=0,
                     note_type="note type 1",
+                    note_fields={"c1f1": "c1fv1", "c1f2": "c1f2v2"},
                 ),
                 Card(
                     card_id=2,
@@ -66,6 +69,7 @@ class ManipulateDecks:
                     sort_field_value="card2",
                     due_value=0,
                     note_type="note type 2",
+                    note_fields={"c2f1": "c2fv1", "c2f2": "c2f2v2"},
                 ),
             ]
             # END MOCK
