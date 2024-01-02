@@ -2,6 +2,7 @@
 Statistics tab
 """
 from dataclasses import fields
+from typing import Optional
 from unittest.mock import Mock
 
 from nicegui import ui
@@ -12,8 +13,10 @@ from omakase.backend.om_user import (
     LAST_SELECTED_DECK_KEY,
     point_to_om_user_data,
 )
+from omakase.exceptions import display_exception
 from omakase.frontend.tabs.utils import TabContent
 from omakase.frontend.web_user import OM_USERNAME_KEY, point_to_web_user_data
+from omakase.om_logging import logger
 
 
 class EditDeckContent(TabContent):
@@ -21,14 +24,14 @@ class EditDeckContent(TabContent):
 
     def __init__(self) -> None:
         # Names for assignment
-        self._SELECTED_ROW_ATTR_NAME = "_selected_row"
+        # self._SELECTED_ROW_ATTR_NAME = "_selected_row"
         # Assignment
         self.web_user_data: dict = point_to_web_user_data()
         self.om_username: str = self.web_user_data.get(OM_USERNAME_KEY)
         self.om_user_data: str = point_to_om_user_data(om_username=self.om_username)
         self.deck_manipulator = ManipulateDecks(om_username=self.om_username)
         self._aggrid_table: ui.aggrid = self._build_aggrid_mock()
-        setattr(self, self._SELECTED_ROW_ATTR_NAME, None)
+        # setattr(self, self._SELECTED_ROW_ATTR_NAME, None)
         self._cards: list[Card] = []
 
     def _build_aggrid_mock(self):
@@ -78,7 +81,8 @@ class EditDeckContent(TabContent):
         # Select the fields that relate to the important items for that mnem style.
         # [Save/use the last] fields for that card type > mnem style.
         # Edit pane (w. edit save functionality)
-        ui.label().bind_text_from(target_object=self, target_name="_selected_row")
+        # ui.label().bind_text_from(target_object=self, target_name="_selected_row")
+        self._display_card_editor(selected_card_index=None)
 
     def _init_deck_display(self) -> None:
         """Display deck as an aggrid table, assign to self._aggrid_table"""
@@ -99,7 +103,10 @@ class EditDeckContent(TabContent):
             }
         ).on(
             type="cellClicked",
-            handler=lambda e: setattr(self, "_selected_row", e.args["rowIndex"]),
+            # handler=lambda e: setattr(self, "_selected_row", e.args["rowIndex"]),
+            handler=lambda e: self._display_card_editor(
+                selected_card_index=e.args["rowIndex"]
+            ),
         )
 
     def _get_agrid_rows_from_cards(self) -> list[dict]:
@@ -139,7 +146,25 @@ class EditDeckContent(TabContent):
         # Refresh the aggrid object
         self._aggrid_table.update()
 
-    def _display_card_editor(self):
-        if getattr(self, self._SELECTED_ROW_ATTR_NAME) is None:
-            # TODO:
-            pass
+    @ui.refreshable
+    def _display_card_editor(self, selected_card_index: Optional[int]) -> None:
+        # Display nothing if no selecfted card
+        if selected_card_index is None:
+            if self._cards == [] or self._cards is None:
+                return None
+        # Else, get the card and display it...
+        else:
+            # ... assuming there is a card to display! If not...
+            try:
+                card = self._cards[selected_card_index]
+                self._display_card_editor_if_card_exists(card=card)
+            # ... we throw an exception
+            except IndexError:
+                logger.exception(
+                    f"User {self.om_username} pointed to a card that is not"
+                    " present. WTF."
+                )
+                display_exception()
+
+    def _display_card_editor_if_card_exists(card: Card) -> None:
+        pass

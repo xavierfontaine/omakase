@@ -1,10 +1,10 @@
 """Shared utils for NiceGUI"""
-import traceback
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from nicegui import ui
 
+from omakase.exceptions import display_exception
 from omakase.frontend.web_user import AUTH_STATUS_KEY, point_to_web_user_data
 from omakase.om_logging import logger
 
@@ -27,9 +27,10 @@ class TabContent(ABC):
                 self._display_if_not_logged()
         # Handle exception
         except Exception as e:  # noqa: F841
-            exc = traceback.format_exc()
-            ui.label(f"Encountered the following error: {exc}")
-            logger.error(exc)
+            display_exception()
+            logger.exception(
+                "Exception caught at the top of the tab content interface."
+            )
 
     def _display_if_not_logged(self):
         ui.label("Please log in 🥰")
