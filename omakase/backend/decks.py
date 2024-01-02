@@ -76,3 +76,15 @@ class ManipulateDecks:
         else:
             cards = []
         return cards
+
+    def save_note_to_deck(
+        self, deck_name: str, note_id: int, note_fields: dict[FieldName, FieldValue]
+    ):
+        """Update a note with `note_field`"""
+        # TODO: implement all
+        # BEGIN MOCK
+        print(
+            f"Faking that we are saving {note_id=} to {deck_name=} with new values"
+            f" {note_fields=}."
+        )
+        # END MOCK

@@ -1,6 +1,7 @@
 """
 Statistics tab
 """
+import functools as ft
 from dataclasses import fields
 from typing import Optional
 from unittest.mock import Mock
@@ -29,7 +30,7 @@ class EditDeckContent(TabContent):
         self.web_user_data: dict = point_to_web_user_data()
         self.om_username: str = self.web_user_data.get(OM_USERNAME_KEY)
         self.om_user_data: str = point_to_om_user_data(om_username=self.om_username)
-        self.deck_manipulator = ManipulateDecks(om_username=self.om_username)
+        self._deck_manipulator = ManipulateDecks(om_username=self.om_username)
         self._aggrid_table: ui.aggrid = self._build_aggrid_mock()
         # setattr(self, self._SELECTED_ROW_ATTR_NAME, None)
         self._cards: list[Card] = []
@@ -43,13 +44,13 @@ class EditDeckContent(TabContent):
         return aggrid_table
 
     def _a_deck_exists(self) -> bool:
-        return self.deck_manipulator.list_decks() != []
+        return self._deck_manipulator.list_decks() != []
 
     def _sanitize_last_used_deck_in_storage(self) -> None:
         """Handle the special cases where no deck name is stored in memory, or if that
         deck doesn't exist anymore"""
         current_last_selected_deck = self.om_user_data.get(LAST_SELECTED_DECK_KEY)
-        deck_list = self.deck_manipulator.list_decks()
+        deck_list = self._deck_manipulator.list_decks()
         if (current_last_selected_deck == LAST_SELECTED_DECK_DEFAULT) | (
             current_last_selected_deck not in deck_list
         ):
@@ -82,7 +83,7 @@ class EditDeckContent(TabContent):
         # [Save/use the last] fields for that card type > mnem style.
         # Edit pane (w. edit save functionality)
         # ui.label().bind_text_from(target_object=self, target_name="_selected_row")
-        self._display_card_editor(selected_card_index=None)
+        self._display_card_editor_if_possible(selected_card_index=None)
 
     def _init_deck_display(self) -> None:
         """Display deck as an aggrid table, assign to self._aggrid_table"""
@@ -104,7 +105,7 @@ class EditDeckContent(TabContent):
         ).on(
             type="cellClicked",
             # handler=lambda e: setattr(self, "_selected_row", e.args["rowIndex"]),
-            handler=lambda e: self._display_card_editor(
+            handler=lambda e: self._display_card_editor_if_possible.refresh(
                 selected_card_index=e.args["rowIndex"]
             ),
         )
@@ -129,7 +130,7 @@ class EditDeckContent(TabContent):
         - Refresh the aggrid table
         """
         ui.select(
-            options=self.deck_manipulator.list_decks(),
+            options=self._deck_manipulator.list_decks(),
             on_change=lambda e: self._update_aggrid_on_deck_change(deck_name=e.value),
         ).bind_value(
             target_object=self.om_user_data, target_name=LAST_SELECTED_DECK_KEY
@@ -138,7 +139,7 @@ class EditDeckContent(TabContent):
     def _update_aggrid_on_deck_change(self, deck_name: str) -> None:
         """Store cadre to self._cards and refresh agrid table"""
         # Get cards from deck
-        self._cards = self.deck_manipulator.get_cards_from_deck(
+        self._cards = self._deck_manipulator.get_cards_from_deck(
             deck_name=deck_name,
         )
         # Change the aggrid table content
@@ -147,17 +148,19 @@ class EditDeckContent(TabContent):
         self._aggrid_table.update()
 
     @ui.refreshable
-    def _display_card_editor(self, selected_card_index: Optional[int]) -> None:
+    def _display_card_editor_if_possible(
+        self, selected_card_index: Optional[int]
+    ) -> None:
+        """Display card editor if possible, otherwise display nothing/an exception"""
         # Display nothing if no selecfted card
         if selected_card_index is None:
-            if self._cards == [] or self._cards is None:
-                return None
+            return None
         # Else, get the card and display it...
         else:
             # ... assuming there is a card to display! If not...
             try:
                 card = self._cards[selected_card_index]
-                self._display_card_editor_if_card_exists(card=card)
+                self._display_card_editor_when_card_exists(card=card)
             # ... we throw an exception
             except IndexError:
                 logger.exception(
@@ -166,5 +169,21 @@ class EditDeckContent(TabContent):
                 )
                 display_exception()
 
-    def _display_card_editor_if_card_exists(card: Card) -> None:
-        pass
+    @ui.refreshable
+    def _display_card_editor_when_card_exists(self, card: Card) -> None:
+        """Display the card editor given a card"""
+        note_fields = card.note_fields
+        for field_name, field_content in note_fields.items():
+            ui.textarea(label=field_name).bind_value(
+                target_object=note_fields, target_name=field_name
+            )
+        # Display a save button, with a save mechanism
+        ui.button(
+            text="Save note",
+            on_click=ft.partial(
+                self._deck_manipulator.save_note_to_deck,
+                deck_name=self.om_user_data.get(LAST_SELECTED_DECK_KEY),
+                note_id=card.note_id,
+                note_fields=note_fields,
+            ),
+        )
