@@ -4,6 +4,10 @@ version = "0.1.0"
 description = ""
 authors = ["Xavier Fontaine <xavier.fontainec@gmail.com>"]
 readme = "README.md"
+packages = [
+  { include  = "omakase" },
+  { include  = "ankiapi" },
+]
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -11,6 +15,7 @@ nicegui = "^1.4.6"
 pandas = "^2.1.4"
 fastapi = "^0.105.0"
 loguru = "^0.7.2"
+anki = "^23.12.1"
 
 
 [tool.poetry.group.dev.dependencies]
