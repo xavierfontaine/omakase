@@ -2,13 +2,12 @@
 Statistics tab
 """
 import functools as ft
-from dataclasses import fields
 from typing import Optional
 from unittest.mock import Mock
 
 from nicegui import ui
 
-from omakase.backend.decks import Card, ManipulateDecks
+from omakase.backend.decks import Card, ManipulateDecks, get_card_property_names
 from omakase.backend.om_user import (
     LAST_SELECTED_DECK_DEFAULT,
     LAST_SELECTED_DECK_KEY,
@@ -91,7 +90,7 @@ class EditDeckContent(TabContent):
             deck_name=self.om_user_data[LAST_SELECTED_DECK_KEY]
         )
         # Display cards
-        card_fields = [field.name for field in fields(Card)]
+        card_fields = get_card_property_names()
         self._aggrid_table = ui.aggrid(
             options={
                 "columnDefs": [

@@ -1,7 +1,7 @@
 """
 Query and edit decks
 """
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 
 from omakase.annotations import FieldName, FieldValue
 
@@ -19,8 +19,17 @@ class Card:
     note_fields: dict[FieldName, FieldValue]
 
     def get_card_properties(self) -> dict:
-        """Return the card properties as a dict"""
-        return asdict(self)
+        """Return the card properties (excl the card's fields) as a dict"""
+        dic = asdict(self)
+        dic.pop("note_fields")
+        return dic
+
+
+def get_card_property_names() -> list:
+    """Return the property names (excl the card's fields)"""
+    names = [field.name for field in fields(Card)]
+    names.pop(names.index("note_fields"))
+    return names
 
 
 # ===============
