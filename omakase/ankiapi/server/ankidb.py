@@ -1,9 +1,12 @@
 """
 Manipulate an Anki db
 """
+from typing import Optional
+
 from anki.collection import Collection
 
 from omakase.annotations import CardId, DeckId, DeckName, FieldIdx, FieldValue, NoteId
+from omakase.om_logging import logger
 
 
 class ManipulateAnkiDb:
@@ -30,8 +33,8 @@ class ManipulateAnkiDb:
         no_exception_occured = exc_value is None
         return no_exception_occured
 
-    def list_decks(self) -> dict[DeckName, DeckId]:
-        deck_list = {deck["name"]: deck["id"] for deck in self._coll.decks.all()}
+    def list_decks(self) -> dict[DeckId, DeckName]:
+        deck_list = {deck["id"]: deck["name"] for deck in self._coll.decks.all()}
         return deck_list
 
     def list_cards_in_deck(self, deck_id: DeckId) -> list[CardId]:
@@ -43,9 +46,25 @@ class ManipulateAnkiDb:
         nid = card.note().id
         return nid
 
-    def list_notes_in_deck(self, deck_id: DeckId) -> list[NoteId]:
-        cids = self.list_cards_in_deck(deck_id=deck_id)
-        nids = [self._get_noteid_for_card(card_id=cid) for cid in cids]
+    def list_notes_in_deck(
+        self, deck_id: DeckId, new: Optional[bool] = None
+    ) -> list[NoteId]:
+        # Security check
+        if not str(deck_id).isdigit():
+            logger.critical(
+                f"A non-digit deck id {deck_id=} was passed to build an sql query"
+            )
+            return []
+        # Building the query (incl if new/not new)
+        deck_name = self.list_decks()[deck_id]
+        query = f'deck:"{deck_name}"'
+        if new is not None:
+            if new:
+                query += " is:new"
+            else:
+                query += " -is:new"
+        # Getting the ids
+        nids = self._coll.find_notes(query=query)
         return nids
 
     def update_fields(
@@ -64,10 +83,17 @@ if __name__ == "__main__":
     with ManipulateAnkiDb(db_path=COL_PATH) as anki_manipulator:
         decks = anki_manipulator.list_decks()
         print(f"{decks=}")
-        deck_id = list(decks.values())[0]
+        deck_id = list(decks.keys())[-1]
+        deck_name = decks[deck_id]
+        print(f"selecting deck '{deck_name}' ({deck_id=})")
         card_list = anki_manipulator.list_cards_in_deck(deck_id=deck_id)
         print(f"{card_list=}")
         note_list = anki_manipulator.list_notes_in_deck(deck_id=deck_id)
         print(f"{note_list=}")
+        print(f"{len(note_list)=} (all)")
+        note_list = anki_manipulator.list_notes_in_deck(deck_id=deck_id, new=True)
+        print(f"{len(note_list)=} (new)")
+        note_list = anki_manipulator.list_notes_in_deck(deck_id=deck_id, new=False)
+        print(f"{len(note_list)=} (not new)")
         # note_id = 1700992311745
         # anki_manipulator.update_fields(note_id=note_id, updates={1:"bla"})
