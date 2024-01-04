@@ -69,12 +69,11 @@ class EditDeckContent(TabContent):
         """Display when logged in and a deck exists"""
         # Resync button
         self._display_sync_button()
-        # TODO
         # Enforce the "last selected deck" in user storage makes sense
         self._sanitize_last_used_deck_in_storage()
         # Deck name selector. [Save/use the last] deck.
         self._display_deck_selector()
-        # Get cards
+        # Display card browser
         self._init_deck_display()
         # TODO: Have a "new/not new" filter system.
         # Select the mnem style. [Save/use the last] mnem style for the card type.
@@ -87,6 +86,10 @@ class EditDeckContent(TabContent):
 
     def _init_deck_display(self) -> None:
         """Display deck as an aggrid table, assign to self._aggrid_table"""
+        # Get cards
+        self._assign_cards_from_deck(
+            deck_name=self.om_user_data[LAST_SELECTED_DECK_KEY]
+        )
         # Display cards
         card_fields = [field.name for field in fields(Card)]
         self._aggrid_table = ui.aggrid(
@@ -118,7 +121,10 @@ class EditDeckContent(TabContent):
         return [card.get_card_properties() for card in self._cards]
 
     def _display_sync_button(self) -> None:
-        pass
+        ui.button(
+            text="Fetch cards",
+            on_click=self._update_aggrid,
+        )
 
     def _display_deck_selector(self) -> None:
         """
@@ -131,21 +137,30 @@ class EditDeckContent(TabContent):
         """
         ui.select(
             options=self._deck_manipulator.list_decks(),
-            on_change=lambda e: self._update_aggrid_on_deck_change(deck_name=e.value),
+            on_change=lambda e: self._update_aggrid_from_deckname(deck_name=e.value),
         ).bind_value(
             target_object=self.om_user_data, target_name=LAST_SELECTED_DECK_KEY
         )
 
-    def _update_aggrid_on_deck_change(self, deck_name: str) -> None:
-        """Store cadre to self._cards and refresh agrid table"""
-        # Get cards from deck
+    def _assign_cards_from_deck(self, deck_name: str) -> None:
+        """Assign to self._cards attribute"""
         self._cards = self._deck_manipulator.get_cards_from_deck(
             deck_name=deck_name,
         )
+
+    def _update_aggrid_from_deckname(self, deck_name: str) -> None:
+        """Store cadre to self._cards and refresh agrid table"""
+        # Get cards from deck
+        self._assign_cards_from_deck(deck_name=deck_name)
         # Change the aggrid table content
         self._aggrid_table.options["rowData"] = self._get_agrid_rows_from_cards()
         # Refresh the aggrid object
         self._aggrid_table.update()
+
+    def _update_aggrid(self) -> None:
+        """Same as _update_aggrid_from_deckname, but use the stored deck name"""
+        deck_name = self.om_user_data[LAST_SELECTED_DECK_KEY]
+        self._update_aggrid_from_deckname(deck_name=deck_name)
 
     @ui.refreshable
     def _display_card_editor_if_possible(
@@ -181,8 +196,7 @@ class EditDeckContent(TabContent):
         ui.button(
             text="Save note",
             on_click=ft.partial(
-                self._deck_manipulator.save_note_to_deck,
-                deck_name=self.om_user_data.get(LAST_SELECTED_DECK_KEY),
+                self._deck_manipulator.save_note,
                 note_id=card.note_id,
                 note_fields=note_fields,
             ),
