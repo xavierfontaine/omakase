@@ -3,7 +3,13 @@ Query and edit decks
 """
 from dataclasses import asdict, dataclass, fields
 
-from omakase.annotations import FieldName, FieldValue
+from omakase.annotations import (
+    DeckName,
+    FieldName,
+    FieldValue,
+    OmDeckFilterCode,
+    OmDeckFilterUiLabel,
+)
 
 
 # ===============
@@ -16,6 +22,7 @@ class Card:
     sort_field_value: str
     due_value: int
     note_type: str
+    study_status: OmDeckFilterCode
     note_fields: dict[FieldName, FieldValue]
 
     def get_card_properties(self) -> dict:
@@ -58,8 +65,12 @@ class ManipulateDecks:
         # END MOCK
         return decks
 
-    def get_cards_from_deck(self, deck_name: str) -> list[Card]:
-        # TODO: implement core
+    def get_cards_from_deck(
+        self, deck_name: DeckName, om_filter_code: OmDeckFilterCode
+    ) -> list[Card]:
+        # TODO: implement card retrieval
+        # TODO: implement filter system (from the *om* filter, select the cards with the
+        # right *anki* filters)
         # TODO: raise NoSuchDeckException if no1 such deck
         # BEGIN MOCK
         if deck_name == "deck1":
@@ -69,6 +80,7 @@ class ManipulateDecks:
                     note_id=0,
                     sort_field_value="card1",
                     due_value=0,
+                    study_status=0,
                     note_type="note type 1",
                     note_fields={"c1f1": "c1fv1", "c1f2": "c1f2v2"},
                 ),
@@ -76,14 +88,19 @@ class ManipulateDecks:
                     card_id=2,
                     note_id=1,
                     sort_field_value="card2",
+                    study_status=1,
                     due_value=0,
                     note_type="note type 2",
                     note_fields={"c2f1": "c2fv1", "c2f2": "c2f2v2"},
                 ),
             ]
-            # END MOCK
+            if om_filter_code == 1:
+                cards = [cards[0]]
+            elif om_filter_code == 2:
+                cards = [cards[1]]
         else:
             cards = []
+        # END MOCK
         return cards
 
     def save_note(self, note_id: int, note_fields: dict[FieldName, FieldValue]):
@@ -94,3 +111,26 @@ class ManipulateDecks:
             f"Faking that we are saving {note_id=} with new values" f" {note_fields=}."
         )
         # END MOCK
+
+
+@dataclass
+class DeckFilter:
+    """Define a filter for a deck"""
+
+    code: OmDeckFilterCode
+    ui_label: OmDeckFilterUiLabel
+
+
+class DeckFilters:
+    """List of available deck filters, provided as attributes"""
+
+    def __init__(self):
+        self.all_notes = DeckFilter(code=0, ui_label="All cards")
+        self.new_notes = DeckFilter(code=1, ui_label="New")
+        self.in_learning_notes = DeckFilter(code=2, ui_label="In learning")
+
+
+filter_label_obj_corr: dict[OmDeckFilterUiLabel, DeckFilter] = {
+    v.ui_label: v for v in vars(DeckFilters()).values()
+}
+"""Dict of all  {DeckFilter.ui_label: DeckFilter}"""

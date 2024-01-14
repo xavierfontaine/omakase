@@ -13,6 +13,7 @@ from omakase.frontend.tabs import (
 from omakase.frontend.tabs.utils import TabConf
 from omakase.frontend.web_user import AUTH_STATUS_KEY, point_to_web_user_data
 
+
 # Configure tabs
 STATS_TAB_CONF = TabConf(
     name="stats", label="Statistics", icon="auto_graph", content_generator=StatsContent

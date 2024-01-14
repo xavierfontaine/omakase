@@ -1,5 +1,5 @@
 """
-Statistics tab
+Deck edition tab
 """
 import functools as ft
 from typing import Optional
@@ -7,18 +7,34 @@ from unittest.mock import Mock
 
 from nicegui import ui
 
-from omakase.backend.decks import Card, ManipulateDecks, get_card_property_names
+from omakase.annotations import OmDeckFilterCode, OmDeckFilterUiLabel
+from omakase.backend.decks import (
+    Card,
+    DeckFilters,
+    ManipulateDecks,
+    filter_label_obj_corr,
+    get_card_property_names,
+)
 from omakase.backend.om_user import (
+    DECK_FILTER_CORR_KEY,
     LAST_SELECTED_DECK_DEFAULT,
     LAST_SELECTED_DECK_KEY,
-    point_to_om_user_data,
+    point_to_om_user_cache,
 )
 from omakase.exceptions import display_exception
 from omakase.frontend.tabs.utils import TabContent
 from omakase.frontend.web_user import OM_USERNAME_KEY, point_to_web_user_data
 from omakase.om_logging import logger
 
+# =========
+# Constants
+# =========
+_AVAILABLE_DECK_FILTERS = DeckFilters()
 
+
+# =======
+# Classes
+# =======
 class EditDeckContent(TabContent):
     """UI for editing the content of the deck"""
 
@@ -28,7 +44,7 @@ class EditDeckContent(TabContent):
         # Assignment
         self.web_user_data: dict = point_to_web_user_data()
         self.om_username: str = self.web_user_data.get(OM_USERNAME_KEY)
-        self.om_user_data: str = point_to_om_user_data(om_username=self.om_username)
+        self.om_user_data: str = point_to_om_user_cache(om_username=self.om_username)
         self._deck_manipulator = ManipulateDecks(om_username=self.om_username)
         self._aggrid_table: ui.aggrid = self._build_aggrid_mock()
         # setattr(self, self._SELECTED_ROW_ATTR_NAME, None)
@@ -45,6 +61,56 @@ class EditDeckContent(TabContent):
     def _a_deck_exists(self) -> bool:
         return self._deck_manipulator.list_decks() != []
 
+    def _display_if_logged(self) -> None:
+        """Display depending on whether a deck exists or not"""
+        # Stop if no deck available
+        if not self._a_deck_exists():
+            ui.label(
+                "No deck available. Have you synced your collection with our server?"
+            )
+            return None
+        else:
+            self._display_all_if_deck_exists()
+
+    def _display_all_if_deck_exists(self):
+        """Display when logged in and a deck exists"""
+        # Deck name selector. [Save/use the last] deck.
+        self._display_deck_selector()
+        # Display card browser
+        self._display_deck()
+        with ui.row():
+            # self._display_note_filter_radio()
+            # Resync button
+            self._display_sync_button()
+        # Select the mnem style. [Save/use the last] mnem style for the card type.
+        # TODO
+        # Select the fields that relate to the important items for that mnem style.
+        # [Save/use the last] fields for that card type > mnem style.
+        # Edit pane (w. edit save functionality)
+        # ui.label().bind_text_from(target_object=self, target_name="_selected_row")
+        self._display_card_editor_if_possible(selected_card_index=None)
+
+    def _display_deck_selector(self) -> None:
+        """
+        Display deck selector
+
+        Behavior
+        - update self._cards upon selection
+        - save in LAST_SELECTED_DECK_KEY of om_user data
+        - Refresh the aggrid table
+        """
+        # Enforce the "last selected deck" in user storage makes sense
+        self._sanitize_last_used_deck_in_storage()
+        # Display
+        ui.select(
+            options=self._deck_manipulator.list_decks(),
+            on_change=lambda e: self._update_ui_from_deckname(deck_name=e.value),
+        ).bind_value(
+            target_object=self.om_user_data, target_name=LAST_SELECTED_DECK_KEY
+        ).props(
+            "outlined"
+        )
+
     def _sanitize_last_used_deck_in_storage(self) -> None:
         """Handle the special cases where no deck name is stored in memory, or if that
         deck doesn't exist anymore"""
@@ -55,39 +121,16 @@ class EditDeckContent(TabContent):
         ):
             self.om_user_data.update({LAST_SELECTED_DECK_KEY: deck_list[0]})
 
-    def _display_if_logged(self) -> None:
-        """Display depending on whether a deck exists or not"""
-        # Stop if no deck available
-        if not self._a_deck_exists():
-            ui.label("No deck available. Have you synced them with our server?")
-            return None
-        else:
-            self._display_all_if_deck_exists()
-
-    def _display_all_if_deck_exists(self):
-        """Display when logged in and a deck exists"""
-        # Resync button
-        self._display_sync_button()
-        # Enforce the "last selected deck" in user storage makes sense
-        self._sanitize_last_used_deck_in_storage()
-        # Deck name selector. [Save/use the last] deck.
-        self._display_deck_selector()
-        # Display card browser
-        self._init_deck_display()
-        # TODO: Have a "new/not new" filter system.
-        # Select the mnem style. [Save/use the last] mnem style for the card type.
-        # TODO
-        # Select the fields that relate to the important items for that mnem style.
-        # [Save/use the last] fields for that card type > mnem style.
-        # Edit pane (w. edit save functionality)
-        # ui.label().bind_text_from(target_object=self, target_name="_selected_row")
-        self._display_card_editor_if_possible(selected_card_index=None)
-
-    def _init_deck_display(self) -> None:
+    @ui.refreshable
+    def _display_deck(self) -> None:
         """Display deck as an aggrid table, assign to self._aggrid_table"""
         # Get cards
+        deck_name = self.om_user_data[LAST_SELECTED_DECK_KEY]
+        # TODO: handle case where no filter
+        filter_name = self.om_user_data[DECK_FILTER_CORR_KEY][deck_name]
         self._assign_cards_from_deck(
-            deck_name=self.om_user_data[LAST_SELECTED_DECK_KEY]
+            deck_name=deck_name,
+            filter_name=filter_name,
         )
         # Display cards
         card_fields = get_card_property_names()
@@ -121,45 +164,63 @@ class EditDeckContent(TabContent):
 
     def _display_sync_button(self) -> None:
         ui.button(
-            text="Fetch cards",
-            on_click=self._update_aggrid,
+            text="Pull deck again",
+            on_click=self._update_agrid,
         )
 
-    def _display_deck_selector(self) -> None:
-        """
-        Display deck selector
-
-        Behavior
-        - update self._cards upon selection
-        - save in LAST_SELECTED_DECK_KEY of om_user data
-        - Refresh the aggrid table
-        """
-        ui.select(
-            options=self._deck_manipulator.list_decks(),
-            on_change=lambda e: self._update_aggrid_from_deckname(deck_name=e.value),
+    @ui.refreshable
+    def _display_note_filter_radio(self) -> None:
+        """Display radio filter determining which cards to keep (all, new, in study)"""
+        # Get the current deck name
+        deck_name = self.om_user_data[LAST_SELECTED_DECK_KEY]
+        # If no prefered filter for that deck in the cache, create one
+        if deck_name not in self.om_user_data[DECK_FILTER_CORR_KEY]:
+            self.om_user_data[DECK_FILTER_CORR_KEY][
+                deck_name
+            ] = _AVAILABLE_DECK_FILTERS.all_notes.ui_label
+        ui.radio(
+            options=list(filter_label_obj_corr.keys()),
+            on_change=lambda deck_name=deck_name: self._update_ui_from_deckname(
+                deck_name=deck_name
+            ),
         ).bind_value(
-            target_object=self.om_user_data, target_name=LAST_SELECTED_DECK_KEY
+            target_object=self.om_user_data[DECK_FILTER_CORR_KEY],
+            target_name=deck_name,
+        ).props(
+            "inline"
         )
+        # TODO: the mutually called refresh cause an infinite recursion loop. Solve.
+        # TODO: reload the cards while taking the filter into account
 
-    def _assign_cards_from_deck(self, deck_name: str) -> None:
+    def _assign_cards_from_deck(
+        self, deck_name: str, filter_name: OmDeckFilterUiLabel
+    ) -> None:
         """Assign to self._cards attribute"""
+        om_filter_code = filter_label_obj_corr[filter_name].code
         self._cards = self._deck_manipulator.get_cards_from_deck(
-            deck_name=deck_name,
+            deck_name=deck_name, om_filter_code=om_filter_code
         )
 
-    def _update_aggrid_from_deckname(self, deck_name: str) -> None:
-        """Store cadre to self._cards and refresh agrid table"""
+    def _update_ui_from_deckname(self, deck_name: str) -> None:
+        """Update ui for new deck name
+
+        Store cadre to self._cards and refresh agrid table. Use the prefered filter for
+        the deck.
+        """
+        # Update the selected filter with the prefered one
+        self._display_note_filter_radio.refresh()
         # Get cards from deck
-        self._assign_cards_from_deck(deck_name=deck_name)
+        filter_name = self.om_user_data[DECK_FILTER_CORR_KEY][deck_name]
+        self._assign_cards_from_deck(deck_name=deck_name, filter_name=filter_name)
         # Change the aggrid table content
         self._aggrid_table.options["rowData"] = self._get_agrid_rows_from_cards()
         # Refresh the aggrid object
         self._aggrid_table.update()
 
-    def _update_aggrid(self) -> None:
-        """Same as _update_aggrid_from_deckname, but use the stored deck name"""
+    def _update_agrid(self) -> None:
+        """Same as _update_ui_from_deckname, but use the stored deck name"""
         deck_name = self.om_user_data[LAST_SELECTED_DECK_KEY]
-        self._update_aggrid_from_deckname(deck_name=deck_name)
+        self._update_ui_from_deckname(deck_name=deck_name)
 
     @ui.refreshable
     def _display_card_editor_if_possible(
