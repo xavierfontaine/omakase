@@ -12,7 +12,7 @@ from omakase.om_logging import logger
 # Keys of the omakase user storage
 LAST_SELECTED_DECK_KEY = "last_selected_deck"
 LAST_SELECTED_DECK_DEFAULT = None
-DECK_FILTER_CORR_KEY = "deck_filter_correspondance"
+DECK_UI_FILTER_CORR_KEY = "deck_ui_filter_correspondance"
 DECK_FILTER_CORR_DEFAULT = {}
 
 
@@ -42,8 +42,8 @@ def init_missing_om_user_cache(om_username: str) -> None:
     om_user_data = point_to_om_user_cache(om_username=om_username)
     if LAST_SELECTED_DECK_KEY not in om_user_data:
         om_user_data[LAST_SELECTED_DECK_KEY] = LAST_SELECTED_DECK_DEFAULT
-    if DECK_FILTER_CORR_KEY not in om_user_data:
-        om_user_data[DECK_FILTER_CORR_KEY] = DECK_FILTER_CORR_DEFAULT
+    if DECK_UI_FILTER_CORR_KEY not in om_user_data:
+        om_user_data[DECK_UI_FILTER_CORR_KEY] = DECK_FILTER_CORR_DEFAULT
 
 
 # TODO: reuse the below for writting to SQL db

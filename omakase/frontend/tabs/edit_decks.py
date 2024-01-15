@@ -16,7 +16,7 @@ from omakase.backend.decks import (
     get_card_property_names,
 )
 from omakase.backend.om_user import (
-    DECK_FILTER_CORR_KEY,
+    DECK_UI_FILTER_CORR_KEY,
     LAST_SELECTED_DECK_DEFAULT,
     LAST_SELECTED_DECK_KEY,
     point_to_om_user_cache,
@@ -83,7 +83,7 @@ class EditDeckContent(TabContent):
         filter_name = self._get_current_filter_ui_name(deck_name=deck_name)
         self._display_deck(deck_name=deck_name, filter_name=filter_name)
         with ui.row():
-            # self._display_note_filter_radio(deck_name=deck_name)
+            self._display_note_filter_radio(deck_name=deck_name)
             # Resync button
             self._display_sync_button()
         # Select the mnem style. [Save/use the last] mnem style for the card type.
@@ -117,11 +117,11 @@ class EditDeckContent(TabContent):
     def _get_current_filter_ui_name(self, deck_name: DeckName) -> OmDeckFilterUiLabel:
         """Get current filter name for deck, assigning 'all notes' if none"""
         # If no prefered filter for that deck in the cache, create one
-        if deck_name not in self.om_user_data[DECK_FILTER_CORR_KEY]:
-            self.om_user_data[DECK_FILTER_CORR_KEY][
+        if deck_name not in self.om_user_data[DECK_UI_FILTER_CORR_KEY]:
+            self.om_user_data[DECK_UI_FILTER_CORR_KEY][
                 deck_name
             ] = _AVAILABLE_DECK_FILTERS.all_notes.ui_label
-        return self.om_user_data[DECK_FILTER_CORR_KEY][deck_name]
+        return self.om_user_data[DECK_UI_FILTER_CORR_KEY][deck_name]
 
     @ui.refreshable
     def _display_deck_selector(self) -> None:
@@ -150,7 +150,7 @@ class EditDeckContent(TabContent):
         # Update the displayed deck
         self._display_deck.refresh(deck_name=deck_name, filter_name=filter_name)
         # Update the displayed filter button
-        # TODO
+        self._display_note_filter_radio.refresh(deck_name=deck_name)
 
     @ui.refreshable
     def _display_deck(
@@ -203,15 +203,14 @@ class EditDeckContent(TabContent):
         deck_name = self._get_current_deck_name()
         filter_name = self._get_current_filter_ui_name(deck_name=deck_name)
         self._display_deck.refresh(deck_name=deck_name, filter_name=filter_name)
-        # TODO: update filter selector
-        pass
+        self._display_note_filter_radio.refresh(deck_name=deck_name)
 
     @ui.refreshable
     def _display_note_filter_radio(self, deck_name: DeckName) -> None:
         """Display radio filter determining which cards to keep (all, new, in study)"""
         # If no prefered filter for that deck in the cache, create one
-        if deck_name not in self.om_user_data[DECK_FILTER_CORR_KEY]:
-            self.om_user_data[DECK_FILTER_CORR_KEY][
+        if deck_name not in self.om_user_data[DECK_UI_FILTER_CORR_KEY]:
+            self.om_user_data[DECK_UI_FILTER_CORR_KEY][
                 deck_name
             ] = _AVAILABLE_DECK_FILTERS.all_notes.ui_label
         ui.radio(
@@ -220,19 +219,17 @@ class EditDeckContent(TabContent):
                 filter_name=e.value, deck_name=deck_name
             ),
         ).bind_value(
-            target_object=self.om_user_data[DECK_FILTER_CORR_KEY],
+            target_object=self.om_user_data[DECK_UI_FILTER_CORR_KEY],
             target_name=deck_name,
         ).props(
             "inline"
         )
-        # TODO: the mutually called refresh cause an infinite recursion loop. Solve.
-        # TODO: reload the cards while taking the filter into account
 
     def _actions_on_filter_selection(
         self, filter_name: OmDeckFilterUiLabel, deck_name: DeckName
     ) -> None:
-        # TODO: implement
-        pass
+        # Update displayed cards
+        self._display_deck.refresh(deck_name=deck_name, filter_name=filter_name)
 
     def _assign_cards_from_deck(
         self, deck_name: str, filter_name: OmDeckFilterUiLabel
