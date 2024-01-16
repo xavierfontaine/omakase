@@ -10,7 +10,7 @@ from unittest.mock import Mock
 
 from nicegui import ui
 
-from omakase.annotations import DeckName, OmDeckFilterUiLabel
+from omakase.annotations import DeckName, MnemonicUiLabel, OmDeckFilterUiLabel
 from omakase.backend.decks import (
     Card,
     DeckFilters,
@@ -18,6 +18,7 @@ from omakase.backend.decks import (
     filter_label_obj_corr,
     get_card_property_names,
 )
+from omakase.backend.mnemonics import MnemConf, tc_mnem_conf, tc_revision_mnem_conf
 from omakase.backend.om_user import (
     DECK_UI_FILTER_CORR_KEY,
     LAST_SELECTED_DECK_DEFAULT,
@@ -33,6 +34,8 @@ from omakase.om_logging import logger
 # Constants
 # =========
 _AVAILABLE_DECK_FILTERS = DeckFilters()
+_AVAILABLE_MNEMONICS: list[MnemConf] = [tc_mnem_conf, tc_revision_mnem_conf]
+_DEFAULT_MNEM_NAME = _AVAILABLE_MNEMONICS[0].ui_label
 
 
 # =======
@@ -96,7 +99,7 @@ class EditDeckTabContent(TabContent):
         # Select the fields that relate to the important items for that mnem style.
         # [Save/use the last] fields for that card type > mnem style.
         # Edit pane (w. edit save functionality)
-        self._field_editor.display_editor_section(selected_card_index=None)
+        self._field_editor.display_field_editor(selected_card_index=None)
 
     def _get_current_deck_name(self) -> Optional[DeckName]:
         """Get current deck name from user data
@@ -169,7 +172,7 @@ class EditDeckTabContent(TabContent):
         # Update the displayed filter button
         self._display_note_filter_radio.refresh(deck_name=deck_name)
         # Update note editor
-        self._field_editor.display_editor_section.refresh(selected_card_index=None)
+        self._field_editor.display_field_editor.refresh(selected_card_index=None)
 
     @ui.refreshable
     def _display_deck(
@@ -206,7 +209,7 @@ class EditDeckTabContent(TabContent):
 
     def _actions_on_agrid_cell_click(self, selected_card_index: int) -> None:
         """Display card editor, prepare generator conf dialog box for display"""
-        self._field_editor.display_editor_section.refresh(
+        self._field_editor.display_field_editor.refresh(
             selected_card_index=selected_card_index
         )
         # # Display card editor
@@ -240,7 +243,7 @@ class EditDeckTabContent(TabContent):
         filter_name = self._get_current_filter_ui_name(deck_name=deck_name)
         self._display_deck.refresh(deck_name=deck_name, filter_name=filter_name)
         self._display_note_filter_radio.refresh(deck_name=deck_name)
-        self._field_editor.display_editor_section.refresh(selected_card_index=None)
+        self._field_editor.display_field_editor.refresh(selected_card_index=None)
 
     @ui.refreshable
     def _display_note_filter_radio(self, deck_name: DeckName) -> None:
@@ -267,7 +270,7 @@ class EditDeckTabContent(TabContent):
     ) -> None:
         # Update displayed cards
         self._display_deck.refresh(deck_name=deck_name, filter_name=filter_name)
-        self._field_editor.display_editor_section.refresh(selected_card_index=None)
+        self._field_editor.display_field_editor.refresh(selected_card_index=None)
 
     def _assign_cards_from_deck(
         self, deck_name: str, filter_name: OmDeckFilterUiLabel
@@ -280,17 +283,27 @@ class EditDeckTabContent(TabContent):
 
 
 class _FieldEditor:
+    """Display the field edition system (incl mnemonic generation)"""
+
     def __init__(self, whole_tab: EditDeckTabContent):
         self._whole_tab = whole_tab
+        self._available_mnemn_by_name: dict[MnemonicUiLabel, MnemConf] = {
+            mnem.ui_label: mnem for mnem in _AVAILABLE_MNEMONICS
+        }
+        self._current_mnem_name = _DEFAULT_MNEM_NAME
 
     @ui.refreshable
-    def display_editor_section(self, selected_card_index: Optional[int]):
+    def display_field_editor(self, selected_card_index: Optional[int]):
         """Display editor's header, generation controlers, field editor"""
         # Display nothing if not card index
         if selected_card_index is None:
             return None
         # Header
         self._display_editor_header()
+        # Mnemn selector
+        with ui.row():
+            self._display_mnemonic_selector()
+            self._display_mnemonic_descriptor()
         # Generation controller
         deck_name = self._whole_tab._get_current_deck_name()
         card = self._whole_tab._get_card(
@@ -304,6 +317,18 @@ class _FieldEditor:
     @ui.refreshable
     def _display_editor_header(self) -> None:
         ui.markdown("## Note editor")
+
+    def _display_mnemonic_selector(self) -> None:
+        ui.select(options=list(self._available_mnemn_by_name.keys())).bind_value(
+            target_object=self, target_name="_current_mnem_name"
+        ).tooltip("select the type of mnemonic for generation")
+
+    def _display_mnemonic_descriptor(self) -> None:
+        ui.label().bind_text_from(
+            target_object=self,
+            target_name="_current_mnem_name",
+            backward=lambda s: self._available_mnemn_by_name[s].ui_descr,
+        )
 
     @ui.refreshable
     def _display_mnemonic_configurator(self, note_type: str) -> None:

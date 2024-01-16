@@ -3,6 +3,7 @@ Custom annotated types
 """
 from typing import Annotated, Literal
 
+# Deck/card/notes-related
 FieldName = Annotated[str, "Field of a note"]
 FieldValue = Annotated[str, "Value of a note"]
 FieldIdx = Annotated[str, "Index of a field in a note"]
@@ -15,3 +16,11 @@ OmDeckFilterCode = Annotated[
 DeckId = Annotated[int, "ID of a deck"]
 CardId = Annotated[int, "ID of a card"]
 NoteId = Annotated[int, "ID of a note"]
+
+# Mnemonic-related
+ComponentConcept = Annotated[str, "Concept used to recall the target concept"]
+TargetConcept = Annotated[str, "Concept to recall"]
+GeneratedText = Annotated[str, "Generated text"]
+PromptParamName = Annotated[str, "Field name in a prompt"]
+Prompt = Annotated[str, "Prompt"]
+MnemonicUiLabel = Annotated[str, "UI label of a mnemonic"]
