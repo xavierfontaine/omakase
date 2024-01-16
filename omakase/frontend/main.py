@@ -7,12 +7,11 @@ from omakase.frontend.login import Logger
 from omakase.frontend.tabs import (
     AddDocContent,
     AddSmallerContent,
-    EditDeckContent,
+    EditDeckTabContent,
     StatsContent,
 )
 from omakase.frontend.tabs.utils import TabConf
 from omakase.frontend.web_user import AUTH_STATUS_KEY, point_to_web_user_data
-
 
 # Configure tabs
 STATS_TAB_CONF = TabConf(
@@ -34,7 +33,7 @@ EDIT_DECK_TAB_CONF = TabConf(
     name="edit_decks",
     label="Edit decks",
     icon="mode_edit_outline",
-    content_generator=EditDeckContent,
+    content_generator=EditDeckTabContent,
 )
 TAB_CONF_LIST: list[TabConf] = [
     STATS_TAB_CONF,

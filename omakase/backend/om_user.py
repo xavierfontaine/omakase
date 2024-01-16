@@ -5,14 +5,14 @@ All data are considered persisted.
 """
 from nicegui import app
 
-from omakase.annotations import DeckName
-from omakase.backend.decks import DeckFilter, DeckFilters
-from omakase.om_logging import logger
+# from omakase.annotations import DeckName
+# from omakase.backend.decks import DeckFilter, DeckFilters
+# from omakase.om_logging import logger
 
 # Keys of the omakase user storage
 LAST_SELECTED_DECK_KEY = "last_selected_deck"
 LAST_SELECTED_DECK_DEFAULT = None
-DECK_UI_FILTER_CORR_KEY = "deck_ui_filter_correspondance"
+DECK_UI_FILTER_CORR_KEY = "deck_filter_correspondance"
 DECK_FILTER_CORR_DEFAULT = {}
 
 
@@ -67,7 +67,9 @@ def init_missing_om_user_cache(om_username: str) -> None:
 #         # END MOCK
 #         return filt
 #
-#     def set_prefered_filter(self, deck_name: DeckName, new_filter: DeckFilter) -> None:
+#     def set_prefered_filter(
+#       self, deck_name: DeckName, new_filter: DeckFilter
+#     ) -> None:
 #         # TODO: implement
 #         # BEGIN MOCK
 #         logger.info(f"Pretend to change prefered filter to {new_filter=}")

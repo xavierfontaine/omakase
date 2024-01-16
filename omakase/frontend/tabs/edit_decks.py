@@ -1,5 +1,6 @@
 # TODO: change logic to get cards instead of notes (so that I can modify card
 # attributes, for instance, although most editing will be on note fields.)
+# TODO: when stabilized, add docstrings
 """
 Deck edition tab
 """
@@ -13,7 +14,7 @@ from omakase.annotations import DeckName, OmDeckFilterUiLabel
 from omakase.backend.decks import (
     Card,
     DeckFilters,
-    ManipulateDecks,
+    DecksManipulator,
     filter_label_obj_corr,
     get_card_property_names,
 )
@@ -37,7 +38,7 @@ _AVAILABLE_DECK_FILTERS = DeckFilters()
 # =======
 # Classes
 # =======
-class EditDeckContent(TabContent):
+class EditDeckTabContent(TabContent):
     """UI for editing the content of the deck"""
 
     def __init__(self) -> None:
@@ -47,11 +48,12 @@ class EditDeckContent(TabContent):
         self.web_user_data: dict = point_to_web_user_data()
         self.om_username: str = self.web_user_data.get(OM_USERNAME_KEY)
         self.om_user_data: str = point_to_om_user_cache(om_username=self.om_username)
-        self._deck_manipulator = ManipulateDecks(om_username=self.om_username)
+        self._deck_manipulator = DecksManipulator(om_username=self.om_username)
         self._aggrid_table: ui.aggrid = self._build_aggrid_mock()
         # setattr(self, self._SELECTED_ROW_ATTR_NAME, None)
         self._cards: list[Card] = []
         self._dialog = ui.dialog()
+        self._field_editor: _FieldEditor = _FieldEditor(whole_tab=self)
 
     def _build_aggrid_mock(self):
         """Build a mock aggrid table for the first run of the interface. The deck button
@@ -94,7 +96,7 @@ class EditDeckContent(TabContent):
         # Select the fields that relate to the important items for that mnem style.
         # [Save/use the last] fields for that card type > mnem style.
         # Edit pane (w. edit save functionality)
-        self._display_whole_editor_section(selected_card_index=None)
+        self._field_editor.display_editor_section(selected_card_index=None)
 
     def _get_current_deck_name(self) -> Optional[DeckName]:
         """Get current deck name from user data
@@ -167,7 +169,7 @@ class EditDeckContent(TabContent):
         # Update the displayed filter button
         self._display_note_filter_radio.refresh(deck_name=deck_name)
         # Update note editor
-        self._display_whole_editor_section.refresh(selected_card_index=None)
+        self._field_editor.display_editor_section.refresh(selected_card_index=None)
 
     @ui.refreshable
     def _display_deck(
@@ -204,7 +206,7 @@ class EditDeckContent(TabContent):
 
     def _actions_on_agrid_cell_click(self, selected_card_index: int) -> None:
         """Display card editor, prepare generator conf dialog box for display"""
-        self._display_whole_editor_section.refresh(
+        self._field_editor.display_editor_section.refresh(
             selected_card_index=selected_card_index
         )
         # # Display card editor
@@ -238,7 +240,7 @@ class EditDeckContent(TabContent):
         filter_name = self._get_current_filter_ui_name(deck_name=deck_name)
         self._display_deck.refresh(deck_name=deck_name, filter_name=filter_name)
         self._display_note_filter_radio.refresh(deck_name=deck_name)
-        self._display_whole_editor_section.refresh(selected_card_index=None)
+        self._field_editor.display_editor_section.refresh(selected_card_index=None)
 
     @ui.refreshable
     def _display_note_filter_radio(self, deck_name: DeckName) -> None:
@@ -265,7 +267,7 @@ class EditDeckContent(TabContent):
     ) -> None:
         # Update displayed cards
         self._display_deck.refresh(deck_name=deck_name, filter_name=filter_name)
-        self._display_whole_editor_section.refresh(selected_card_index=None)
+        self._field_editor.display_editor_section.refresh(selected_card_index=None)
 
     def _assign_cards_from_deck(
         self, deck_name: str, filter_name: OmDeckFilterUiLabel
@@ -276,8 +278,13 @@ class EditDeckContent(TabContent):
             deck_name=deck_name, om_filter_code=om_filter_code
         )
 
+
+class _FieldEditor:
+    def __init__(self, whole_tab: EditDeckTabContent):
+        self._whole_tab = whole_tab
+
     @ui.refreshable
-    def _display_whole_editor_section(self, selected_card_index: Optional[int]):
+    def display_editor_section(self, selected_card_index: Optional[int]):
         """Display editor's header, generation controlers, field editor"""
         # Display nothing if not card index
         if selected_card_index is None:
@@ -285,8 +292,10 @@ class EditDeckContent(TabContent):
         # Header
         self._display_editor_header()
         # Generation controller
-        deck_name = self._get_current_deck_name()
-        card = self._get_card(deck_name=deck_name, card_index=selected_card_index)
+        deck_name = self._whole_tab._get_current_deck_name()
+        card = self._whole_tab._get_card(
+            deck_name=deck_name, card_index=selected_card_index
+        )
         note_type = card.note_type
         self._display_mnemonic_configurator(note_type=note_type)
         # Field editor
@@ -305,30 +314,20 @@ class EditDeckContent(TabContent):
             ),
         ).tooltip("configure the mnemonic genertor")
 
-    # @ui.refreshable
-    # def _display_edition_boxes(
-    #     self, selected_card_index: int
-    # ) -> None:
-    #     """Display card editor if possible, otherwise display nothing/an exception"""
-    #     deck_name = self._get_current_deck_name()
-    #     card = self._get_card(deck_name=deck_name,
-    #                           card_index=selected_card_index)
-    #     self._display_field_editors(card=card)
-
     def _actions_on_setting_icon_click(self, note_type: str) -> None:
-        deck_name = self._get_current_deck_name()
+        deck_name = self._whole_tab._get_current_deck_name()
         self._prepare_generator_conf_dialog(deck_name=deck_name, note_type=note_type)
-        self._dialog.open()
+        self._whole_tab._dialog.open()
 
     def _prepare_generator_conf_dialog(
         self, deck_name: DeckName, note_type: str
     ) -> None:
         """Prepare the generator conf dialog for display
 
-        Won't open the dialog. Use self._dialog.open().
+        Won't open the dialog. Use self._whole_tab._dialog.open().
         """
-        self._dialog.clear()
-        with self._dialog, ui.card():
+        self._whole_tab._dialog.clear()
+        with self._whole_tab._dialog, ui.card():
             ui.label(f"{deck_name=}, {note_type=}")
 
     @ui.refreshable
@@ -343,7 +342,7 @@ class EditDeckContent(TabContent):
         ui.button(
             text="Save note",
             on_click=ft.partial(
-                self._deck_manipulator.save_note,
+                self._whole_tab._deck_manipulator.save_note,
                 note_id=card.note_id,
                 note_fields=note_fields,
             ),

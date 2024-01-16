@@ -42,7 +42,7 @@ def get_card_property_names() -> list:
 # ===============
 # SRS-independent
 # ===============
-class ManipulateDecks:
+class DecksManipulator:
     def __init__(self, om_username: str) -> None:
         """Manipulate decks of `om_username`"""
         self._om_username = om_username
