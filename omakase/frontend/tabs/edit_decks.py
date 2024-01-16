@@ -1,3 +1,5 @@
+# TODO: change logic to get cards instead of notes (so that I can modify card
+# attributes, for instance, although most editing will be on note fields.)
 """
 Deck edition tab
 """
@@ -7,7 +9,7 @@ from unittest.mock import Mock
 
 from nicegui import ui
 
-from omakase.annotations import DeckName, OmDeckFilterCode, OmDeckFilterUiLabel
+from omakase.annotations import DeckName, OmDeckFilterUiLabel
 from omakase.backend.decks import (
     Card,
     DeckFilters,
@@ -49,6 +51,7 @@ class EditDeckContent(TabContent):
         self._aggrid_table: ui.aggrid = self._build_aggrid_mock()
         # setattr(self, self._SELECTED_ROW_ATTR_NAME, None)
         self._cards: list[Card] = []
+        self._dialog = ui.dialog()
 
     def _build_aggrid_mock(self):
         """Build a mock aggrid table for the first run of the interface. The deck button
@@ -91,8 +94,7 @@ class EditDeckContent(TabContent):
         # Select the fields that relate to the important items for that mnem style.
         # [Save/use the last] fields for that card type > mnem style.
         # Edit pane (w. edit save functionality)
-        # ui.label().bind_text_from(target_object=self, target_name="_selected_row")
-        self._display_card_editor_if_possible(selected_card_index=None)
+        self._display_whole_editor_section(selected_card_index=None)
 
     def _get_current_deck_name(self) -> Optional[DeckName]:
         """Get current deck name from user data
@@ -123,6 +125,19 @@ class EditDeckContent(TabContent):
             ] = _AVAILABLE_DECK_FILTERS.all_notes.ui_label
         return self.om_user_data[DECK_UI_FILTER_CORR_KEY][deck_name]
 
+    def _get_card(self, deck_name: DeckName, card_index: int) -> Card:
+        """Get card, throw an error if not present"""
+        try:
+            card = self._cards[card_index]
+        # ... we throw an exception
+        except IndexError:
+            logger.exception(
+                f"User {self.om_username} pointed to a card that is not"
+                " present. WTF."
+            )
+            display_exception()
+        return card
+
     @ui.refreshable
     def _display_deck_selector(self) -> None:
         """
@@ -151,6 +166,8 @@ class EditDeckContent(TabContent):
         self._display_deck.refresh(deck_name=deck_name, filter_name=filter_name)
         # Update the displayed filter button
         self._display_note_filter_radio.refresh(deck_name=deck_name)
+        # Update note editor
+        self._display_whole_editor_section.refresh(selected_card_index=None)
 
     @ui.refreshable
     def _display_deck(
@@ -180,10 +197,27 @@ class EditDeckContent(TabContent):
         ).on(
             type="cellClicked",
             # handler=lambda e: setattr(self, "_selected_row", e.args["rowIndex"]),
-            handler=lambda e: self._display_card_editor_if_possible.refresh(
+            handler=lambda e: self._actions_on_agrid_cell_click(
                 selected_card_index=e.args["rowIndex"]
             ),
         )
+
+    def _actions_on_agrid_cell_click(self, selected_card_index: int) -> None:
+        """Display card editor, prepare generator conf dialog box for display"""
+        self._display_whole_editor_section.refresh(
+            selected_card_index=selected_card_index
+        )
+        # # Display card editor
+        # self._display_edition_boxes.refresh(
+        #     selected_card_index=selected_card_index
+        # )
+        # # Prepare generator conf dialog for display
+        # deck_name = self._get_current_deck_name()
+        # card = self._get_card(deck_name=deck_name,
+        #                       card_index=selected_card_index)
+        # note_type = card.note_type
+        # self._prepare_generator_conf_dialog(
+        #     deck_name=deck_name, note_type=note_type)
 
     def _get_agrid_rows_from_cards(self) -> list[dict]:
         """Transfom self._cards to agrid rows
@@ -204,6 +238,7 @@ class EditDeckContent(TabContent):
         filter_name = self._get_current_filter_ui_name(deck_name=deck_name)
         self._display_deck.refresh(deck_name=deck_name, filter_name=filter_name)
         self._display_note_filter_radio.refresh(deck_name=deck_name)
+        self._display_whole_editor_section.refresh(selected_card_index=None)
 
     @ui.refreshable
     def _display_note_filter_radio(self, deck_name: DeckName) -> None:
@@ -230,6 +265,7 @@ class EditDeckContent(TabContent):
     ) -> None:
         # Update displayed cards
         self._display_deck.refresh(deck_name=deck_name, filter_name=filter_name)
+        self._display_whole_editor_section.refresh(selected_card_index=None)
 
     def _assign_cards_from_deck(
         self, deck_name: str, filter_name: OmDeckFilterUiLabel
@@ -241,35 +277,68 @@ class EditDeckContent(TabContent):
         )
 
     @ui.refreshable
-    def _display_card_editor_if_possible(
-        self, selected_card_index: Optional[int]
-    ) -> None:
-        """Display card editor if possible, otherwise display nothing/an exception"""
-        # Display nothing if no selecfted card
+    def _display_whole_editor_section(self, selected_card_index: Optional[int]):
+        """Display editor's header, generation controlers, field editor"""
+        # Display nothing if not card index
         if selected_card_index is None:
             return None
-        # Else, get the card and display it...
-        else:
-            # ... assuming there is a card to display! If not...
-            try:
-                card = self._cards[selected_card_index]
-                self._display_card_editor_when_card_exists(card=card)
-            # ... we throw an exception
-            except IndexError:
-                logger.exception(
-                    f"User {self.om_username} pointed to a card that is not"
-                    " present. WTF."
-                )
-                display_exception()
+        # Header
+        self._display_editor_header()
+        # Generation controller
+        deck_name = self._get_current_deck_name()
+        card = self._get_card(deck_name=deck_name, card_index=selected_card_index)
+        note_type = card.note_type
+        self._display_mnemonic_configurator(note_type=note_type)
+        # Field editor
+        self._display_field_editors(card=card)
 
     @ui.refreshable
-    def _display_card_editor_when_card_exists(self, card: Card) -> None:
+    def _display_editor_header(self) -> None:
+        ui.markdown("## Note editor")
+
+    @ui.refreshable
+    def _display_mnemonic_configurator(self, note_type: str) -> None:
+        ui.button(
+            icon="settings",
+            on_click=lambda note_type=note_type: self._actions_on_setting_icon_click(
+                note_type=note_type
+            ),
+        ).tooltip("configure the mnemonic genertor")
+
+    # @ui.refreshable
+    # def _display_edition_boxes(
+    #     self, selected_card_index: int
+    # ) -> None:
+    #     """Display card editor if possible, otherwise display nothing/an exception"""
+    #     deck_name = self._get_current_deck_name()
+    #     card = self._get_card(deck_name=deck_name,
+    #                           card_index=selected_card_index)
+    #     self._display_field_editors(card=card)
+
+    def _actions_on_setting_icon_click(self, note_type: str) -> None:
+        deck_name = self._get_current_deck_name()
+        self._prepare_generator_conf_dialog(deck_name=deck_name, note_type=note_type)
+        self._dialog.open()
+
+    def _prepare_generator_conf_dialog(
+        self, deck_name: DeckName, note_type: str
+    ) -> None:
+        """Prepare the generator conf dialog for display
+
+        Won't open the dialog. Use self._dialog.open().
+        """
+        self._dialog.clear()
+        with self._dialog, ui.card():
+            ui.label(f"{deck_name=}, {note_type=}")
+
+    @ui.refreshable
+    def _display_field_editors(self, card: Card) -> None:
         """Display the card editor given a card"""
         note_fields = card.note_fields
         for field_name, field_content in note_fields.items():
             ui.textarea(label=field_name).bind_value(
                 target_object=note_fields, target_name=field_name
-            )
+            ).props("outlined")
         # Display a save button, with a save mechanism
         ui.button(
             text="Save note",
