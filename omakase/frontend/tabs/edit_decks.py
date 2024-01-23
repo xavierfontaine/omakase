@@ -10,7 +10,13 @@ from unittest.mock import Mock
 
 from nicegui import ui
 
-from omakase.annotations import DeckName, MnemonicUiLabel, OmDeckFilterUiLabel
+from omakase.annotations import (
+    DeckName,
+    MnemonicUiLabel,
+    NoteFieldName,
+    NoteType,
+    OmDeckFilterUiLabel,
+)
 from omakase.backend.decks import (
     Card,
     DeckFilters,
@@ -50,7 +56,7 @@ class EditDeckTabContent(TabContent):
         # Assignment
         self.web_user_data: dict = point_to_web_user_data()
         self.om_username: str = self.web_user_data.get(OM_USERNAME_KEY)
-        self.om_user_data: str = point_to_om_user_cache(om_username=self.om_username)
+        self.om_user_data: dict = point_to_om_user_cache(om_username=self.om_username)
         self._deck_manipulator = DecksManipulator(om_username=self.om_username)
         self._aggrid_table: ui.aggrid = self._build_aggrid_mock()
         # setattr(self, self._SELECTED_ROW_ATTR_NAME, None)
@@ -212,17 +218,6 @@ class EditDeckTabContent(TabContent):
         self._field_editor.display_field_editor.refresh(
             selected_card_index=selected_card_index
         )
-        # # Display card editor
-        # self._display_edition_boxes.refresh(
-        #     selected_card_index=selected_card_index
-        # )
-        # # Prepare generator conf dialog for display
-        # deck_name = self._get_current_deck_name()
-        # card = self._get_card(deck_name=deck_name,
-        #                       card_index=selected_card_index)
-        # note_type = card.note_type
-        # self._prepare_generator_conf_dialog(
-        #     deck_name=deck_name, note_type=note_type)
 
     def _get_agrid_rows_from_cards(self) -> list[dict]:
         """Transfom self._cards to agrid rows
@@ -300,30 +295,36 @@ class _FieldEditor:
             return None
         # Header
         self._display_editor_header()
-        # Mnemn selector
+        # Mnemn type selector
         with ui.row():
-            self._display_mnemonic_selector()
-            self._display_mnemonic_descriptor()
+            self._display_mnem_type_selector()
+            self._display_mnem_type_descriptor()
         # Generation controller
         deck_name = self._whole_tab._get_current_deck_name()
         card = self._whole_tab._get_card(
             deck_name=deck_name, card_index=selected_card_index
         )
         note_type = card.note_type
-        self._display_mnemonic_configurator(note_type=note_type)
-        # Field editor
+        field_names = list(card.note_fields.keys())
+        self._display_mnemonic_configurator(
+            note_type=note_type,
+            field_names=field_names,
+        )
+        # Generation trigger
+        # TODO
+        # Field editors
         self._display_field_editors(card=card)
 
     @ui.refreshable
     def _display_editor_header(self) -> None:
         ui.markdown("## Note editor")
 
-    def _display_mnemonic_selector(self) -> None:
+    def _display_mnem_type_selector(self) -> None:
         ui.select(options=list(self._available_mnemn_by_name.keys())).bind_value(
             target_object=self, target_name="_current_mnem_name"
         ).tooltip("select the type of mnemonic for generation")
 
-    def _display_mnemonic_descriptor(self) -> None:
+    def _display_mnem_type_descriptor(self) -> None:
         ui.label().bind_text_from(
             target_object=self,
             target_name="_current_mnem_name",
@@ -331,21 +332,30 @@ class _FieldEditor:
         )
 
     @ui.refreshable
-    def _display_mnemonic_configurator(self, note_type: str) -> None:
+    def _display_mnemonic_configurator(
+        self,
+        note_type: NoteType,
+        field_names: list[NoteFieldName],
+    ) -> None:
         ui.button(
             icon="settings",
-            on_click=lambda note_type=note_type: self._actions_on_setting_icon_click(
-                note_type=note_type
+            on_click=lambda note_type=note_type, field_names=field_names: self._actions_on_settings_icon_click(  # noqa: E501
+                note_type=note_type,
+                field_names=field_names,
             ),
         ).tooltip("configure the mnemonic genertor")
 
-    def _actions_on_setting_icon_click(self, note_type: str) -> None:
+    def _actions_on_settings_icon_click(
+        self, note_type: NoteType, field_names: list[NoteFieldName]
+    ) -> None:
         deck_name = self._whole_tab._get_current_deck_name()
-        self._prepare_generator_conf_dialog(deck_name=deck_name, note_type=note_type)
+        self._prepare_generator_conf_dialog(
+            deck_name=deck_name, note_type=note_type, field_names=field_names
+        )
         self._whole_tab._dialog.open()
 
     def _prepare_generator_conf_dialog(
-        self, deck_name: DeckName, note_type: str
+        self, deck_name: DeckName, note_type: NoteType, field_names: list[NoteFieldName]
     ) -> None:
         """Prepare the generator conf dialog for display
 
@@ -353,7 +363,7 @@ class _FieldEditor:
         """
         self._whole_tab._dialog.clear()
         with self._whole_tab._dialog, ui.card():
-            ui.label(f"{deck_name=}, {note_type=}")
+            ui.label(f"{deck_name=}, {note_type=}, {field_names=}")
 
     @ui.refreshable
     def _display_field_editors(self, card: Card) -> None:

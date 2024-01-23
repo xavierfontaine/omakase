@@ -64,7 +64,7 @@ def create_main_page():
         logger.make_button()
 
     # Containers for the contents
-    with ui.tab_panels(tabs, value=TAB_CONF_LIST[0].name).classes("w-full"):
+    with ui.tab_panels(tabs, value=TAB_CONF_LIST[3].name).classes("w-full"):
         for tab_conf in TAB_CONF_LIST:
             with ui.tab_panel(tab_conf.name):
                 tab_conf.content_generator().display_tab_content()

@@ -5,7 +5,14 @@ from typing import Optional
 
 from anki.collection import Collection
 
-from omakase.annotations import CardId, DeckId, DeckName, FieldIdx, FieldValue, NoteId
+from omakase.annotations import (
+    CardId,
+    DeckId,
+    DeckName,
+    NoteFieldIdx,
+    NoteFieldValue,
+    NoteId,
+)
 from omakase.om_logging import logger
 
 
@@ -68,7 +75,7 @@ class ManipulateAnkiDb:
         return nids
 
     def update_fields(
-        self, note_id: NoteId, updates=dict[FieldIdx, FieldValue]
+        self, note_id: NoteId, updates=dict[NoteFieldIdx, NoteFieldValue]
     ) -> None:
         """Update the fields of a note"""
         note = self._coll.get_note(id=note_id)

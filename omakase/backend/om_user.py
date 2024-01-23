@@ -14,6 +14,9 @@ LAST_SELECTED_DECK_KEY = "last_selected_deck"
 LAST_SELECTED_DECK_DEFAULT = None
 DECK_UI_FILTER_CORR_KEY = "deck_filter_correspondance"
 DECK_FILTER_CORR_DEFAULT = {}
+MNEM_NOTE_ASSOCS_KEY = "mnemn_note_assocs"
+PROMPT_NOTE_ASSOCS_KEY = "prompt_note_assocs"
+GENOUT_NOTE_ASSOCS_KEY = "genout_note_assocs"
 
 
 # =========================

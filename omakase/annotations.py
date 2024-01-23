@@ -4,9 +4,9 @@ Custom annotated types
 from typing import Annotated, Literal
 
 # Deck/card/notes-related
-FieldName = Annotated[str, "Field of a note"]
-FieldValue = Annotated[str, "Value of a note"]
-FieldIdx = Annotated[str, "Index of a field in a note"]
+NoteFieldName = Annotated[str, "Field of a note"]
+NoteFieldValue = Annotated[str, "Value of a note"]
+NoteFieldIdx = Annotated[str, "Index of a field in a note"]
 DeckName = Annotated[str, "Name of a deck"]
 OmDeckFilterUiLabel = Annotated[str, "UI label of an deck filter"]
 AnkiTypeCode = Annotated[int, "Anki type code (0=new, 1=learning, 2=due)"]
@@ -16,6 +16,7 @@ OmDeckFilterCode = Annotated[
 DeckId = Annotated[int, "ID of a deck"]
 CardId = Annotated[int, "ID of a card"]
 NoteId = Annotated[int, "ID of a note"]
+NoteType = Annotated[int, "Name of a note type"]
 
 # Mnemonic-related
 ComponentConcept = Annotated[str, "Concept used to recall the target concept"]

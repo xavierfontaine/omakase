@@ -5,8 +5,8 @@ from dataclasses import asdict, dataclass, fields
 
 from omakase.annotations import (
     DeckName,
-    FieldName,
-    FieldValue,
+    NoteFieldName,
+    NoteFieldValue,
     OmDeckFilterCode,
     OmDeckFilterUiLabel,
 )
@@ -23,7 +23,7 @@ class Card:
     due_value: int
     note_type: str
     study_status: OmDeckFilterCode
-    note_fields: dict[FieldName, FieldValue]
+    note_fields: dict[NoteFieldName, NoteFieldValue]
 
     def get_card_properties(self) -> dict:
         """Return the card properties (excl the card's fields) as a dict"""
@@ -103,7 +103,7 @@ class DecksManipulator:
         # END MOCK
         return cards
 
-    def save_note(self, note_id: int, note_fields: dict[FieldName, FieldValue]):
+    def save_note(self, note_id: int, note_fields: dict[NoteFieldName, NoteFieldValue]):
         """Update a note with `note_field`"""
         # TODO: implement all
         # BEGIN MOCK
