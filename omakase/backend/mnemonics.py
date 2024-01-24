@@ -1,6 +1,6 @@
 from copy import deepcopy
 from dataclasses import dataclass, fields
-from typing import Literal, Optional, Type, Union
+from typing import Annotated, Literal, Optional, Type, Union, get_args, get_origin
 
 from omakase.annotations import (
     ComponentConcept,
@@ -76,10 +76,6 @@ class PromptParams:
         """Return all fields (class attributes)"""
         return [f.name for f in fields(self)]
 
-    def get_str_field_names(self) -> list[PromptParamName]:
-        """Return all str fields"""
-        return [f.name for f in fields(self) if f.type == str]
-
     def _get_field_attribute(
         self, field_name: str
     ) -> Union[str, dict[str, str], dict[str, dict[str, str]]]:
@@ -121,6 +117,26 @@ class PromptParams:
         return error_msg.format(field_name=field_name)
 
 
+def get_str_field_names(
+    prompt_params_class: Type[PromptParams],
+) -> list[PromptParamName]:
+    """Return all str fields"""
+    out_field_names = []
+    for f in fields(prompt_params_class):
+        if f.type == str:
+            out_field_names.append(f.name)
+        elif get_origin(f.type) is Annotated:
+            if get_args(f.type)[0] == str:
+                out_field_names.append(f.name)
+    return out_field_names
+
+
+@dataclass
+class PromptParamFieldUiConf:
+    ui_name: str
+    ui_explanation: str
+
+
 @dataclass
 class MnemConf:
     prompt_param_class: Type[PromptParams]
@@ -128,41 +144,68 @@ class MnemConf:
     ui_descr: str
     template_name: str
     template_version: int
+    prompt_param_field_ui_descr: dict[PromptParamName, PromptParamFieldUiConf]
 
 
-class MnemonicNoteFieldMapper:
+class MnemonicNoteFieldMapData:
     def __init__(
         self,
-        prompt_params: PromptParams,
+        prompt_params_class: Type[PromptParams],
         note_type: NoteType,
         note_field_names: list[NoteFieldName],
         om_user_data: dict,
     ):
-        """Map mnemonic fields (prompt, output) to note fields
+        """OM user data mapping mnemonic fields (prompt, output) to the note fields
+
+        At instanciation, retrieve the associations between the `note_type` and the
+        `prompt_params` type from the om user data.
+        1. If the data do not exist yet, initialize the storage.
+        2. If the data are not empty, clean up the existing associations, so as to adapt
+        to potential changes in prompt parameters or note field names.
+
 
         Attributes
             prompt_note_assocs (dict[PromptParamName, Optional[NoteFieldName]]):
             association between **string** prompt parameters and a note field (or None).
             self.genout_note_assocs (Optional[NoteFieldName]): note field associated to
             the generation output, default None
+
+        Methods
+            genout_is_associated_to_note_field()
         """
         # Assign params to self
         self._om_user_data = om_user_data
         self._note_type = note_type
         self._note_field_names = note_field_names
-        self._prompt_params = prompt_params
-        self._prompt_params_type = type(prompt_params).__name__
+        self._prompt_params_class = prompt_params_class
+        self._prompt_params_type = prompt_params_class.__qualname__
         # init
         self._init_om_user_data_if_not()
         self.prompt_note_assocs: dict[
             PromptParamName, Optional[NoteFieldName]
         ] = self._point_to_prompt_note_assocs()
-        self.genout_note_assocs: Optional[
-            NoteFieldName
-        ] = self._point_to_genout_note_assocs()
+        # self.genout_note_assocs: Optional[
+        #     NoteFieldName
+        # ] = self._point_to_genout_note_assocs()
         # Sanitize
         self._sanitize_prompt_note_assocs()
         self._sanitize_genout_note_assocs()
+
+    def genout_is_associated_to_note_field(self) -> bool:
+        """Is the generation output associated to an (existing) note field?"""
+        return self.genout_note_assocs in self._note_field_names
+
+    @property
+    def genout_note_assocs(self) -> Optional[NoteFieldName]:
+        return self._om_user_data[MNEM_NOTE_ASSOCS_KEY][self._note_type][
+            self._prompt_params_type
+        ][GENOUT_NOTE_ASSOCS_KEY]
+
+    @genout_note_assocs.setter
+    def genout_note_assocs(self, value: NoteFieldName) -> None:
+        self._om_user_data[MNEM_NOTE_ASSOCS_KEY][self._note_type][
+            self._prompt_params_type
+        ][GENOUT_NOTE_ASSOCS_KEY] = value
 
     def _point_to_prompt_note_assocs(
         self,
@@ -171,56 +214,65 @@ class MnemonicNoteFieldMapper:
             self._prompt_params_type
         ][PROMPT_NOTE_ASSOCS_KEY]
 
-    def _point_to_genout_note_assocs(
-        self,
-    ) -> Optional[NoteFieldName]:
-        return self._om_user_data[MNEM_NOTE_ASSOCS_KEY][self._note_type][
-            self._prompt_params_type
-        ][GENOUT_NOTE_ASSOCS_KEY]
+    # def _point_to_genout_note_assocs(
+    #     self,
+    # ) -> Optional[NoteFieldName]:
+    #     return self._om_user_data[MNEM_NOTE_ASSOCS_KEY][self._note_type][
+    #         self._prompt_params_type
+    #     ][GENOUT_NOTE_ASSOCS_KEY]
 
     def _init_om_user_data_if_not(self) -> None:
-        if MNEM_NOTE_ASSOCS_KEY not in self._om_user_data:
+        if MNEM_NOTE_ASSOCS_KEY not in self._om_user_data.keys():
             self._om_user_data[MNEM_NOTE_ASSOCS_KEY] = dict()
+        assoc_storage_root = self._om_user_data[MNEM_NOTE_ASSOCS_KEY]
         # Structure for this specific note type and prompt param type
-        if PROMPT_NOTE_ASSOCS_KEY not in self._om_user_data[MNEM_NOTE_ASSOCS_KEY]:
-            self._om_user_data[MNEM_NOTE_ASSOCS_KEY] = dict()
-        if self._note_type not in self._om_user_data[MNEM_NOTE_ASSOCS_KEY]:
-            self._om_user_data[MNEM_NOTE_ASSOCS_KEY][self._note_type] = dict()
-        if (
-            self._prompt_params_type
-            not in self._om_user_data[MNEM_NOTE_ASSOCS_KEY][self._note_type]
-        ):
-            self._om_user_data[MNEM_NOTE_ASSOCS_KEY][self._note_type][
-                self._prompt_params_type
-            ] = dict()
+        if self._note_type not in assoc_storage_root.keys():
+            assoc_storage_root[self._note_type] = dict()
+        if self._prompt_params_type not in assoc_storage_root[self._note_type].keys():
+            assoc_storage_root[self._note_type][self._prompt_params_type] = dict()
         # Adding the PROMPT_NOTE_ASSOCS_KEY and GENOUT_NOTE_ASSOCS_KEY layers
-        assocs = self._om_user_data[MNEM_NOTE_ASSOCS_KEY][self._note_type][
+        current_assoc = self._om_user_data[MNEM_NOTE_ASSOCS_KEY][self._note_type][
             self._prompt_params_type
         ]
-        if PROMPT_NOTE_ASSOCS_KEY not in assocs:
-            assocs[PROMPT_NOTE_ASSOCS_KEY] = dict()
-        if GENOUT_NOTE_ASSOCS_KEY not in assocs:
-            assocs[GENOUT_NOTE_ASSOCS_KEY] = None
+        if PROMPT_NOTE_ASSOCS_KEY not in current_assoc.keys():
+            current_assoc[PROMPT_NOTE_ASSOCS_KEY] = dict()
+        if GENOUT_NOTE_ASSOCS_KEY not in current_assoc.keys():
+            current_assoc[GENOUT_NOTE_ASSOCS_KEY] = None
 
     def _sanitize_prompt_note_assocs(self) -> None:
-        str_prompt_param_names = self._prompt_params.get_str_field_names()
+        """Ensure the names of the note fields stored in memory indeed exist for that
+        note type. Check that all the prompt parameter names are accounted for --
+        and only them."""
+        # Get names of **string** prompt params
+        str_prompt_param_names = get_str_field_names(
+            prompt_params_class=self._prompt_params_class
+        )
         # check for existing prompt param names that exist in user data but shouldn't
-        for prompt_param in self.prompt_note_assocs:
+        for prompt_param in self.prompt_note_assocs.keys():
             if prompt_param not in str_prompt_param_names:
                 del self.prompt_note_assocs[prompt_param]
         # Check for prompt param names that should be in the user data but aren't
         for prompt_param in str_prompt_param_names:
-            if prompt_param not in self.prompt_note_assocs:
+            if prompt_param not in self.prompt_note_assocs.keys():
                 self.prompt_note_assocs[prompt_param] = None
         # check for existing prompt param associated to an imaginary NoteFieldName
-        for prompt_param in self.prompt_note_assocs:
-            if str_prompt_param_names not in [None] + self._note_field_names:
+        for prompt_param in self.prompt_note_assocs.keys():
+            if self.prompt_note_assocs[prompt_param] not in (
+                [None] + self._note_field_names
+            ):
                 self.prompt_note_assocs[prompt_param] = None
 
     def _sanitize_genout_note_assocs(self) -> None:
-        if self.genout_note_assocs is not None:
-            if self.genout_note_assocs not in self._note_field_names:
-                self.genout_note_assocs = None
+        """Ensure the generation output is either None, or associated to an existing
+        note field.
+        """
+        current_assoc = self._om_user_data[MNEM_NOTE_ASSOCS_KEY][self._note_type][
+            self._prompt_params_type
+        ]
+        genout_note_assocs = current_assoc[GENOUT_NOTE_ASSOCS_KEY]
+        if genout_note_assocs is not None:
+            if genout_note_assocs not in self._note_field_names:
+                current_assoc[GENOUT_NOTE_ASSOCS_KEY] = None
 
 
 # ========================
@@ -245,6 +297,14 @@ tc_mnem_conf = MnemConf(
     ),
     template_name="pure_concepts",
     template_version=0,
+    prompt_param_field_ui_descr={
+        "target_concept": PromptParamFieldUiConf(
+            ui_name="target concept", ui_explanation="TODO"
+        ),
+        "component_concepts": PromptParamFieldUiConf(
+            ui_name="Component concepts", ui_explanation="TODO"
+        ),
+    },
 )
 
 
@@ -261,11 +321,14 @@ class TCRevisionParams(PromptParams):
 
 
 tc_revision_mnem_conf = MnemConf(
-    prompt_param_class=TCParams,
+    prompt_param_class=TCRevisionParams,
     ui_label="improve target & components",
     ui_descr=("Improve on a 'target & components' mnemonic."),
     template_name="pure_concepts_revision",
     template_version=0,
+    prompt_param_field_ui_descr={
+        "mnemonic": PromptParamFieldUiConf(ui_name="mnemonic", ui_explanation="TODO"),
+    },
 )
 
 

@@ -24,7 +24,13 @@ from omakase.backend.decks import (
     filter_label_obj_corr,
     get_card_property_names,
 )
-from omakase.backend.mnemonics import MnemConf, tc_mnem_conf, tc_revision_mnem_conf
+from omakase.backend.mnemonics import (
+    MnemConf,
+    MnemonicNoteFieldMapData,
+    get_str_field_names,
+    tc_mnem_conf,
+    tc_revision_mnem_conf,
+)
 from omakase.backend.om_user import (
     DECK_UI_FILTER_CORR_KEY,
     LAST_SELECTED_DECK_DEFAULT,
@@ -62,7 +68,6 @@ class EditDeckTabContent(TabContent):
         # setattr(self, self._SELECTED_ROW_ATTR_NAME, None)
         self._cards: list[Card] = []
         self._dialog = ui.dialog()
-        self._field_editor: _FieldEditor = _FieldEditor(whole_tab=self)
 
     def _build_aggrid_mock(self):
         """Build a mock aggrid table for the first run of the interface. The deck button
@@ -105,7 +110,7 @@ class EditDeckTabContent(TabContent):
         # Select the fields that relate to the important items for that mnem style.
         # [Save/use the last] fields for that card type > mnem style.
         # Edit pane (w. edit save functionality)
-        self._field_editor.display_field_editor(selected_card_index=None)
+        self._display_field_editor(selected_card_index=None, deck_name=deck_name)
 
     def _get_current_deck_name(self) -> Optional[DeckName]:
         """Get current deck name from user data
@@ -178,7 +183,23 @@ class EditDeckTabContent(TabContent):
         # Update the displayed filter button
         self._display_note_filter_radio.refresh(deck_name=deck_name)
         # Update note editor
-        self._field_editor.display_field_editor.refresh(selected_card_index=None)
+        self._display_field_editor.refresh(
+            selected_card_index=None, deck_name=deck_name
+        )
+
+    @ui.refreshable
+    def _display_field_editor(
+        self, selected_card_index: Optional[int], deck_name: DeckName
+    ):
+        if selected_card_index is None:
+            return
+        else:
+            card = self._get_card(deck_name=deck_name, card_index=selected_card_index)
+            field_editor = _FieldEditor(
+                card=card,
+                whole_tab=self,
+            )
+            field_editor.display_field_editor()
 
     @ui.refreshable
     def _display_deck(
@@ -208,15 +229,17 @@ class EditDeckTabContent(TabContent):
         ).on(
             type="cellClicked",
             # handler=lambda e: setattr(self, "_selected_row", e.args["rowIndex"]),
-            handler=lambda e: self._actions_on_agrid_cell_click(
-                selected_card_index=e.args["rowIndex"]
+            handler=lambda e, deck_name=deck_name: self._actions_on_agrid_cell_click(
+                selected_card_index=e.args["rowIndex"], deck_name=deck_name
             ),
         )
 
-    def _actions_on_agrid_cell_click(self, selected_card_index: int) -> None:
+    def _actions_on_agrid_cell_click(
+        self, selected_card_index: int, deck_name: DeckName
+    ) -> None:
         """Display card editor, prepare generator conf dialog box for display"""
-        self._field_editor.display_field_editor.refresh(
-            selected_card_index=selected_card_index
+        self._display_field_editor.refresh(
+            selected_card_index=selected_card_index, deck_name=deck_name
         )
 
     def _get_agrid_rows_from_cards(self) -> list[dict]:
@@ -238,7 +261,9 @@ class EditDeckTabContent(TabContent):
         filter_name = self._get_current_filter_ui_name(deck_name=deck_name)
         self._display_deck.refresh(deck_name=deck_name, filter_name=filter_name)
         self._display_note_filter_radio.refresh(deck_name=deck_name)
-        self._field_editor.display_field_editor.refresh(selected_card_index=None)
+        self._display_field_editor.refresh(
+            selected_card_index=None, deck_name=deck_name
+        )
 
     @ui.refreshable
     def _display_note_filter_radio(self, deck_name: DeckName) -> None:
@@ -265,7 +290,9 @@ class EditDeckTabContent(TabContent):
     ) -> None:
         # Update displayed cards
         self._display_deck.refresh(deck_name=deck_name, filter_name=filter_name)
-        self._field_editor.display_field_editor.refresh(selected_card_index=None)
+        self._display_field_editor.refresh(
+            selected_card_index=None, deck_name=deck_name
+        )
 
     def _assign_cards_from_deck(
         self, deck_name: str, filter_name: OmDeckFilterUiLabel
@@ -280,19 +307,30 @@ class EditDeckTabContent(TabContent):
 class _FieldEditor:
     """Display the field edition system (incl mnemonic generation)"""
 
-    def __init__(self, whole_tab: EditDeckTabContent):
+    # TODO: mettre la logique (montrer/pas montrer) dans la fonction mère. Une fonction
+    # refreshable dans la fonction mère fera le boulot de montrer/pas montrer.
+    # TODO: mettre deck name & selected_card_index en argument du init
+
+    def __init__(self, card: Card, whole_tab: EditDeckTabContent):
+        # Assignments to self
+        self._card = card
         self._whole_tab = whole_tab
+        # Extract information on card
+        self._note_type = self._card.note_type
+        self._note_field_names = list(self._card.note_fields.keys())
+        # Available and current mnemonic names
         self._available_mnemn_by_name: dict[MnemonicUiLabel, MnemConf] = {
             mnem.ui_label: mnem for mnem in _AVAILABLE_MNEMONICS
         }
         self._current_mnem_name = _DEFAULT_MNEM_NAME
+        # Mnemn <> note field mapping data
+        self._mnemn_note_map_data = self._get_mnem_note_field_mapper(
+            mnem_name=self._current_mnem_name
+        )
 
     @ui.refreshable
-    def display_field_editor(self, selected_card_index: Optional[int]):
+    def display_field_editor(self):
         """Display editor's header, generation controlers, field editor"""
-        # Display nothing if not card index
-        if selected_card_index is None:
-            return None
         # Header
         self._display_editor_header()
         # Mnemn type selector
@@ -300,29 +338,44 @@ class _FieldEditor:
             self._display_mnem_type_selector()
             self._display_mnem_type_descriptor()
         # Generation controller
-        deck_name = self._whole_tab._get_current_deck_name()
-        card = self._whole_tab._get_card(
-            deck_name=deck_name, card_index=selected_card_index
-        )
-        note_type = card.note_type
-        field_names = list(card.note_fields.keys())
         self._display_mnemonic_configurator(
-            note_type=note_type,
-            field_names=field_names,
+            note_type=self._note_type,
+            field_names=self._note_field_names,
         )
         # Generation trigger
         # TODO
         # Field editors
-        self._display_field_editors(card=card)
+        self._display_individual_field_editors(card=self._card)
 
     @ui.refreshable
     def _display_editor_header(self) -> None:
         ui.markdown("## Note editor")
 
     def _display_mnem_type_selector(self) -> None:
-        ui.select(options=list(self._available_mnemn_by_name.keys())).bind_value(
-            target_object=self, target_name="_current_mnem_name"
-        ).tooltip("select the type of mnemonic for generation")
+        ui.select(
+            options=list(self._available_mnemn_by_name.keys()),
+            on_change=lambda e: self._actions_on_changing_mnem_type(mnem_name=e.value),
+        ).bind_value(target_object=self, target_name="_current_mnem_name").tooltip(
+            "select the type of mnemonic for generation"
+        )
+
+    def _get_mnem_note_field_mapper(
+        self, mnem_name: MnemonicUiLabel
+    ) -> MnemonicNoteFieldMapData:
+        return MnemonicNoteFieldMapData(
+            prompt_params_class=self._available_mnemn_by_name[
+                mnem_name
+            ].prompt_param_class,
+            note_type=self._note_type,
+            note_field_names=self._note_field_names,
+            om_user_data=self._whole_tab.om_user_data,
+        )
+
+    def _actions_on_changing_mnem_type(self, mnem_name: MnemonicUiLabel) -> None:
+        # TODO: put that into self, and update everytime the mnemonic type is changed.
+        self._mnemn_note_map_data = self._get_mnem_note_field_mapper(
+            mnem_name=mnem_name
+        )
 
     def _display_mnem_type_descriptor(self) -> None:
         ui.label().bind_text_from(
@@ -341,32 +394,67 @@ class _FieldEditor:
             icon="settings",
             on_click=lambda note_type=note_type, field_names=field_names: self._actions_on_settings_icon_click(  # noqa: E501
                 note_type=note_type,
-                field_names=field_names,
+                note_field_names=field_names,
             ),
         ).tooltip("configure the mnemonic genertor")
 
     def _actions_on_settings_icon_click(
-        self, note_type: NoteType, field_names: list[NoteFieldName]
+        self, note_type: NoteType, note_field_names: list[NoteFieldName]
     ) -> None:
-        deck_name = self._whole_tab._get_current_deck_name()
-        self._prepare_generator_conf_dialog(
-            deck_name=deck_name, note_type=note_type, field_names=field_names
-        )
-        self._whole_tab._dialog.open()
-
-    def _prepare_generator_conf_dialog(
-        self, deck_name: DeckName, note_type: NoteType, field_names: list[NoteFieldName]
-    ) -> None:
-        """Prepare the generator conf dialog for display
-
-        Won't open the dialog. Use self._whole_tab._dialog.open().
-        """
+        # Clean up the dialog box, and prepare the new one
         self._whole_tab._dialog.clear()
         with self._whole_tab._dialog, ui.card():
-            ui.label(f"{deck_name=}, {note_type=}, {field_names=}")
+            self._fill_generator_conf_dialog(
+                note_type=note_type,
+                note_field_names=note_field_names,
+                mnem_name=self._current_mnem_name,
+            )
+        # Disiplay the dialog box
+        self._whole_tab._dialog.open()
+
+    def _fill_generator_conf_dialog(
+        self,
+        note_type: NoteType,
+        note_field_names: list[NoteFieldName],
+        mnem_name: MnemonicUiLabel,
+    ) -> None:
+        """Content for the generator conf dialog"""
+        # Point to user preference on association btwn mnemn & note fields
+        # TODO
+        # Display with hook to user data
+        ui.markdown("### Send output to *(mandatory)*")
+        ui.select(
+            options=note_field_names,
+        ).bind_value(
+            target_object=self._mnemn_note_map_data, target_name="genout_note_assocs"
+        )
+        ui.markdown("### Pre-fill from *(optional)*")
+        prompt_param_class = self._available_mnemn_by_name[mnem_name].prompt_param_class
+        str_prompt_field_names = get_str_field_names(
+            prompt_params_class=prompt_param_class
+        )
+        for prompt_param_name in str_prompt_field_names:
+            with ui.row():
+                prompt_param_ui_name = (
+                    self._available_mnemn_by_name[mnem_name]
+                    .prompt_param_field_ui_descr[prompt_param_name]
+                    .ui_name
+                )
+                prompt_param_ui_expl = (
+                    self._available_mnemn_by_name[mnem_name]
+                    .prompt_param_field_ui_descr[prompt_param_name]
+                    .ui_explanation
+                )
+                ui.label(f"{prompt_param_ui_name}").tooltip(prompt_param_ui_expl)
+                ui.select(
+                    options=note_field_names,
+                ).bind_value(
+                    target_object=self._mnemn_note_map_data.prompt_note_assocs,
+                    target_name=prompt_param_name,
+                )
 
     @ui.refreshable
-    def _display_field_editors(self, card: Card) -> None:
+    def _display_individual_field_editors(self, card: Card) -> None:
         """Display the card editor given a card"""
         note_fields = card.note_fields
         for field_name, field_content in note_fields.items():
