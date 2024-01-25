@@ -424,7 +424,7 @@ class _FieldEditor:
         # Display with hook to user data
         ui.markdown("### Send output to *(mandatory)*")
         ui.select(
-            options=note_field_names,
+            options=[None] + note_field_names,
         ).bind_value(
             target_object=self._mnemn_note_map_data, target_name="genout_note_assocs"
         )
@@ -447,7 +447,7 @@ class _FieldEditor:
                 )
                 ui.label(f"{prompt_param_ui_name}").tooltip(prompt_param_ui_expl)
                 ui.select(
-                    options=note_field_names,
+                    options=[None] + note_field_names,
                 ).bind_value(
                     target_object=self._mnemn_note_map_data.prompt_note_assocs,
                     target_name=prompt_param_name,
