@@ -8,7 +8,6 @@ from omakase.annotations import (
     NoteFieldName,
     NoteFieldValue,
     OmDeckFilterCode,
-    OmDeckFilterUiLabel,
 )
 
 
@@ -118,7 +117,7 @@ class DeckFilter:
     """Define a filter for a deck"""
 
     code: OmDeckFilterCode
-    ui_label: OmDeckFilterUiLabel
+    ui_label: str
 
 
 class DeckFilters:
@@ -130,7 +129,7 @@ class DeckFilters:
         self.in_learning_notes = DeckFilter(code=2, ui_label="In learning")
 
 
-filter_label_obj_corr: dict[OmDeckFilterUiLabel, DeckFilter] = {
+filter_label_obj_corr: dict[str, DeckFilter] = {
     v.ui_label: v for v in vars(DeckFilters()).values()
 }
 """Dict of all  {DeckFilter.ui_label: DeckFilter}"""

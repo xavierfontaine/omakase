@@ -1,8 +1,7 @@
 """
 Abstract classes for the observer pattern
 """
-from abc import ABC, abstractmethod
-from typing import Any
+from abc import ABC
 
 # ============================
 # Observer pattern - observers
@@ -59,11 +58,6 @@ class Observable(ABC):
             return set()
         else:
             self._observers
-
-    @property
-    @abstractmethod
-    def state(self) -> Any:
-        pass
 
     def attach(self, observer: Observer) -> None:
         """Attach a new observer"""

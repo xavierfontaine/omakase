@@ -3,13 +3,11 @@ Handling of the omakase user data
 
 All data are considered persisted.
 """
-from abc import abstractmethod
-from types import MappingProxyType
 from typing import Any
 
 from nicegui import app
 
-from omakase.annotations import DeckName, OmDeckFilterUiLabel
+from omakase.annotations import DeckName
 from omakase.backend.decks import DeckFilters
 from omakase.observer_logic import Observable
 
@@ -20,7 +18,6 @@ from omakase.observer_logic import Observable
 # Keys of the omakase user storage
 USER_CACHES_KEY = "user_caches"
 LAST_SELECTED_DECK_KEY = "last_selected_deck"
-LAST_SELECTED_DECK_DEFAULT = None
 DECK_UI_FILTER_CORR_KEY = "deck_filter_correspondance"
 MNEM_NOTE_ASSOCS_KEY = "mnemn_note_assocs"
 PROMPT_NOTE_ASSOCS_KEY = "prompt_note_assocs"
@@ -52,15 +49,55 @@ def point_to_om_user_cache(om_username: str) -> dict:
     return user_caches[om_username]
 
 
-# =============================
-# Storage-independent functions
-# =============================
-# TODO: eliminate the remainder
-def init_missing_om_user_cache(om_username: str) -> None:
-    """Init missing keys in omakase user storage with default values"""
-    om_user_data = point_to_om_user_cache(om_username=om_username)
-    if LAST_SELECTED_DECK_KEY not in om_user_data:
-        om_user_data[LAST_SELECTED_DECK_KEY] = LAST_SELECTED_DECK_DEFAULT
+# ================
+# Cached datapoint
+# ================
+class CachedUserDatapoint:
+    """User-related data point, synced with app.storage.general
+
+    Data is accessible and editable through the `value` attribute.
+    This construct simplifies the use of nicegui's `bind_*` methods.
+    """
+
+    def __init__(
+        self,
+        om_username: str,
+        root_keys: list[str],
+        subject_key: str,
+        default_value: Any,
+    ) -> None:
+        # Initialization
+        self._default_value = default_value
+        self._subject_key = subject_key
+        # Pointer to user cache
+        self._user_cache = point_to_om_user_cache(om_username=om_username)
+        # Get root dict
+        self._root_dict = self._resolve_root_dict(root_keys=root_keys)
+        # Sanitization
+        self._handle_missing_subject_key()
+
+    @property
+    def value(self) -> Any:
+        return self._root_dict[self._subject_key]
+
+    def _resolve_root_dict(self, root_keys: str) -> dict:
+        """Point to the part of the user  cache described by root_keys
+
+        Create non-existing dict on the way"""
+        pointer = self._user_cache
+        for k in root_keys:
+            if k not in pointer:
+                pointer[k] = {}
+            pointer = pointer[k]
+        return pointer
+
+    @value.setter
+    def value(self, value: Any) -> None:
+        self._root_dict[self._subject_key] = value
+
+    def _handle_missing_subject_key(self) -> None:
+        if self._subject_key not in self._root_dict:
+            self._root_dict[self._subject_key] = self._default_value
 
 
 # ======================
@@ -71,65 +108,40 @@ def init_missing_om_user_cache(om_username: str) -> None:
 # 2/ The configuration of the state can be done through those kwargs
 # In the end, this will reduce the level of factorization (less DRY), but make it more
 # flexible (more AHA.)
-class CachedOmUserData(Observable):
-    """Subject pointing to user data in app.storage.general
-
-    The data is accessed/edited through the `state` attribute.
-    """
-
-    def __init__(self, om_username: str, default_value: Any = None):
-        # Initialization
-        self.default_value = default_value
-        # Pointer to user cache
-        self._user_cache = point_to_om_user_cache(om_username=om_username)
-        # Sanitization
-        self._handle_missing_subject_key()
-
-    @property
-    @abstractmethod
-    def _root_dict(self) -> dict:
-        """Dict to which `self.subject_key` belongs.
-
-        Usually relies on self._user_cache."""
-        pass
-
-    @property
-    @abstractmethod
-    def _subject_key(self) -> str:
-        """Key identifying the state in self._root_dict"""
-        pass
-
-    @property
-    def state(self) -> Any:
-        """State variable"""
-        return self._root_dict[self._subject_key]
-
-    @state.setter
-    def state(self, value: Any) -> None:
-        self._root_dict[self._subject_key] = value
-
-    def _handle_missing_subject_key(self) -> None:
-        if self._subject_key not in self._root_dict:
-            self._root_dict[self._subject_key] = self.default_value
+# class CachedOmUserData(Observable):
+#     """Subject pointing to user data in app.storage.general
+#
+#     The data is accessed/edited through the `state` attribute.
+#     """
+#
+#     def __init__(self, om_username: str, **kwargs):
+#         # Attach all argument to self as  as '_' + `name`
+#         self._om_username = om_username
+#         self._user_cache = point_to_om_user_cache(om_username=om_username)
+#         for k, v in kwargs.items():
+#             setattr(self, f"_{k}", v)
+#         # Pointer to user cache
+#         self._user_cache = point_to_om_user_cache(om_username=om_username)
+#         # Sanitization
+#         self._handle_missing_subject_key()
 
 
 # ========================
 # Subject - implementation
 # ========================
-# TODO: add default here, since LAST_SELECTED_DECK_DEFAULT exists
-class LastSelectedDeck(CachedOmUserData):
-    def __init__(self, *args, **kwargs):
-        # Override to specify expected type
-        self.state: DeckName
-        super().__init__(*args, **kwargs)
+class LastSelectedDeckObl(Observable):
+    """Observable for the last selected deck
 
-    @property
-    def _subject_key(self) -> str:
-        return LAST_SELECTED_DECK_KEY
+    The deck name can be edited/accessed through `deck_name_dp`
+    """
 
-    @property
-    def _root_dict(self) -> dict:
-        return self._user_cache
+    def __init__(self, om_username: str) -> None:
+        self.deck_name_dp = CachedUserDatapoint(
+            om_username=om_username,
+            default_value=None,
+            root_keys=[],
+            subject_key=LAST_SELECTED_DECK_KEY,
+        )
 
 
 # TODO: maybe for DeckFilterCorr, and certainly for MnemonicNoteFieldMapData, create a
@@ -137,32 +149,24 @@ class LastSelectedDeck(CachedOmUserData):
 # TODO: for MnemonicNoteFieldMapData, get closer to what I did for DeckFilterCorr
 
 
-class DeckFilterCorr(Observable):
+class DeckFilterCorrObl(Observable):
+    """Observable for the associations between decks and ui filter labels
+
+    Associations are accessed/edited through `get_filter_dp`"""
+
     def __init__(self, om_username: str):
-        # Pointer to user cache
-        self._user_cache = point_to_om_user_cache(om_username=om_username)
-        # Hidden state
-        self._state: dict[DeckName, OmDeckFilterUiLabel] = self._initialize_state()
+        self._om_username = om_username
 
-    @property
-    def state(self) -> MappingProxyType[dict[DeckName, OmDeckFilterUiLabel]]:
-        return MappingProxyType(self._state)
-
-    def _initialize_state(self) -> dict[DeckName, OmDeckFilterUiLabel]:
-        if DECK_UI_FILTER_CORR_KEY not in self._user_cache:
-            self._user_cache[DECK_UI_FILTER_CORR_KEY] = {}
-        return self._user_cache[DECK_UI_FILTER_CORR_KEY]
-
-    def set_filter_for_deck(
-        self, deck_name: DeckName, ui_filter_name: OmDeckFilterUiLabel
-    ) -> None:
-        self._state[deck_name] = ui_filter_name
-
-    def get_filter_for_deck(self, deck_name: DeckName) -> OmDeckFilterUiLabel:
+    def get_filter_dp(self, deck_name: DeckName) -> CachedUserDatapoint:
         """Default to the ui label for all_notes"""
-        if deck_name not in self._state:
-            self._state[deck_name] = DeckFilters().all_notes.ui_label
-        return self._state[deck_name]
+        default_value = DeckFilters().all_notes.ui_label
+        dp = CachedUserDatapoint(
+            om_username=self._om_username,
+            root_keys=[DECK_UI_FILTER_CORR_KEY],
+            subject_key=deck_name,
+            default_value=default_value,
+        )
+        return dp
 
 
 # TODO: reuse the below for writting to SQL db

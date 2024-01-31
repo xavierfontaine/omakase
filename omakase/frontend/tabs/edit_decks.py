@@ -13,12 +13,11 @@ from unittest.mock import Mock
 
 from nicegui import ui
 
-from omakase.annotations import (
+from omakase.annotations import (  # OmDeckFilterUiLabel,
     DeckName,
     MnemonicUiLabel,
     NoteFieldName,
     NoteType,
-    OmDeckFilterUiLabel,
 )
 from omakase.backend.decks import (
     Card,
@@ -35,10 +34,8 @@ from omakase.backend.mnemonics import (
     tc_revision_mnem_conf,
 )
 from omakase.backend.om_user import (
-    DECK_UI_FILTER_CORR_KEY,
-    LAST_SELECTED_DECK_DEFAULT,
-    DeckFilterCorr,
-    LastSelectedDeck,
+    DeckFilterCorrObl,
+    LastSelectedDeckObl,
     point_to_om_user_cache,
 )
 from omakase.exceptions import display_exception
@@ -78,8 +75,8 @@ class EditDeckTabContent(TabContent):
         # setattr(self, self._SELECTED_ROW_ATTR_NAME, None)
         self._cards: list[Card] = []
         self._dialog = ui.dialog()
-        self._last_selected_deck_data = LastSelectedDeck(om_username=self.om_username)
-        self._deck_ui_filter_corr_data = DeckFilterCorr(om_username=self.om_username)
+        self._last_selected_deck_obs = LastSelectedDeckObl(om_username=self.om_username)
+        self._deck_ui_filter_corr_obs = DeckFilterCorrObl(om_username=self.om_username)
 
     def _build_aggrid_mock(self):
         """Build a mock aggrid table for the first run of the interface. The deck button
@@ -111,9 +108,9 @@ class EditDeckTabContent(TabContent):
         self._display_deck_selector()
         # Display card browser
         deck_name = self._get_current_deck_name()
-        filter_name = self._deck_ui_filter_corr_data.get_filter_for_deck(
+        filter_name = self._deck_ui_filter_corr_obs.get_filter_dp(
             deck_name=deck_name
-        )
+        ).value
         self._display_deck(deck_name=deck_name, filter_name=filter_name)
         with ui.row():
             self._display_note_filter_radio(deck_name=deck_name)
@@ -132,7 +129,6 @@ class EditDeckTabContent(TabContent):
         If corner case, change the user data with sane deck name, and return `None`.
         If not deck in the list anymore, display the no-deck warning.
         """
-        current_last_selected_deck = self._last_selected_deck_data.state
         deck_list = self._deck_manipulator.list_decks()
         # Handle the case there is no deck anymore
         if len(deck_list) == 0:
@@ -140,11 +136,13 @@ class EditDeckTabContent(TabContent):
             return None
         # Handle the special cases where no deck name is stored in memory, or if that
         # deck doesn't exist anymore
-        if (current_last_selected_deck == LAST_SELECTED_DECK_DEFAULT) | (
-            current_last_selected_deck not in deck_list
-        ):
-            self._last_selected_deck_data.state = deck_list[0]
-        return self._last_selected_deck_data.state
+        deck_name_dp = self._last_selected_deck_obs.deck_name_dp
+        if (deck_name_dp.value is None) | (deck_name_dp.value not in deck_list):
+            if len(deck_list) > 0:
+                deck_name_dp.value = deck_list[0]
+            else:
+                deck_name_dp.value = None
+        return deck_name_dp.value
 
     def _get_card(self, deck_name: DeckName, card_index: int) -> Card:
         """Get card, throw an error if not present"""
@@ -174,7 +172,8 @@ class EditDeckTabContent(TabContent):
             options=self._deck_manipulator.list_decks(),
             on_change=lambda e: self._actions_on_deck_selection(deck_name=e.value),
         ).bind_value(
-            target_object=self._last_selected_deck_data, target_name="state"
+            target_object=self._last_selected_deck_obs.deck_name_dp,
+            target_name="value",
         ).props(
             "outlined"
         )
@@ -182,9 +181,9 @@ class EditDeckTabContent(TabContent):
     def _actions_on_deck_selection(self, deck_name: str) -> None:
         """Update the displayed deck and the selected filter"""
         deck_name = self._get_current_deck_name()
-        filter_name = self._deck_ui_filter_corr_data.get_filter_for_deck(
+        filter_name = self._deck_ui_filter_corr_obs.get_filter_dp(
             deck_name=deck_name
-        )
+        ).value
         # Update the displayed deck
         self._display_deck.refresh(deck_name=deck_name, filter_name=filter_name)
         # Update the displayed filter button
@@ -209,9 +208,7 @@ class EditDeckTabContent(TabContent):
             field_editor.display_field_editor()
 
     @ui.refreshable
-    def _display_deck(
-        self, deck_name: DeckName, filter_name: OmDeckFilterUiLabel
-    ) -> None:
+    def _display_deck(self, deck_name: DeckName, filter_name: str) -> None:
         """Display deck as an aggrid table, assign to self._aggrid_table"""
         # Get cards
         self._assign_cards_from_deck(
@@ -265,9 +262,9 @@ class EditDeckTabContent(TabContent):
         self._display_deck_selector.refresh()
         # Update deck display
         deck_name = self._get_current_deck_name()
-        filter_name = self._deck_ui_filter_corr_data.get_filter_for_deck(
+        filter_name = self._deck_ui_filter_corr_obs.get_filter_dp(
             deck_name=deck_name
-        )
+        ).value
         self._display_deck.refresh(deck_name=deck_name, filter_name=filter_name)
         self._display_note_filter_radio.refresh(deck_name=deck_name)
         self._display_field_editor.refresh(
@@ -278,20 +275,18 @@ class EditDeckTabContent(TabContent):
     def _display_note_filter_radio(self, deck_name: DeckName) -> None:
         """Display radio filter determining which cards to keep (all, new, in study)"""
         # If no prefered filter for that deck in the cache, create one
+        filter_name_dp = self._deck_ui_filter_corr_obs.get_filter_dp(
+            deck_name=deck_name
+        )
         ui.radio(
             options=list(filter_label_obj_corr.keys()),
             on_change=lambda e, deck_name=deck_name: self._actions_on_filter_selection(
                 filter_name=e.value, deck_name=deck_name
             ),
-        ).bind_value(
-            target_object=self.om_user_data[DECK_UI_FILTER_CORR_KEY],
-            target_name=deck_name,
-        ).props(
-            "inline"
-        )
+        ).bind_value(target_object=filter_name_dp, target_name="value",).props("inline")
 
     def _actions_on_filter_selection(
-        self, filter_name: OmDeckFilterUiLabel, deck_name: DeckName
+        self, filter_name: str, deck_name: DeckName
     ) -> None:
         # Update displayed cards
         self._display_deck.refresh(deck_name=deck_name, filter_name=filter_name)
@@ -299,9 +294,7 @@ class EditDeckTabContent(TabContent):
             selected_card_index=None, deck_name=deck_name
         )
 
-    def _assign_cards_from_deck(
-        self, deck_name: str, filter_name: OmDeckFilterUiLabel
-    ) -> None:
+    def _assign_cards_from_deck(self, deck_name: str, filter_name: str) -> None:
         """Assign to self._cards attribute"""
         om_filter_code = filter_label_obj_corr[filter_name].code
         self._cards = self._deck_manipulator.get_cards_from_deck(
