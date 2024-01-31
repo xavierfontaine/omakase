@@ -1,3 +1,6 @@
+# TODO: further refacto of the main class (= good opportunity to dive into design
+# patterns : https://python-patterns.guide/)
+# TODO: first code the UI/consummer logic, then the backend logic.
 # TODO: change logic to get cards instead of notes (so that I can modify card
 # attributes, for instance, although most editing will be on note fields.)
 # TODO: when stabilized, add docstrings
@@ -34,7 +37,8 @@ from omakase.backend.mnemonics import (
 from omakase.backend.om_user import (
     DECK_UI_FILTER_CORR_KEY,
     LAST_SELECTED_DECK_DEFAULT,
-    LAST_SELECTED_DECK_KEY,
+    DeckFilterCorr,
+    LastSelectedDeck,
     point_to_om_user_cache,
 )
 from omakase.exceptions import display_exception
@@ -48,6 +52,12 @@ from omakase.om_logging import logger
 _AVAILABLE_DECK_FILTERS = DeckFilters()
 _AVAILABLE_MNEMONICS: list[MnemConf] = [tc_mnem_conf, tc_revision_mnem_conf]
 _DEFAULT_MNEM_NAME = _AVAILABLE_MNEMONICS[0].ui_label
+
+
+# ============
+# Mock classes
+# ============
+PromptSettings = Mock()
 
 
 # =======
@@ -68,6 +78,8 @@ class EditDeckTabContent(TabContent):
         # setattr(self, self._SELECTED_ROW_ATTR_NAME, None)
         self._cards: list[Card] = []
         self._dialog = ui.dialog()
+        self._last_selected_deck_data = LastSelectedDeck(om_username=self.om_username)
+        self._deck_ui_filter_corr_data = DeckFilterCorr(om_username=self.om_username)
 
     def _build_aggrid_mock(self):
         """Build a mock aggrid table for the first run of the interface. The deck button
@@ -99,7 +111,9 @@ class EditDeckTabContent(TabContent):
         self._display_deck_selector()
         # Display card browser
         deck_name = self._get_current_deck_name()
-        filter_name = self._get_current_filter_ui_name(deck_name=deck_name)
+        filter_name = self._deck_ui_filter_corr_data.get_filter_for_deck(
+            deck_name=deck_name
+        )
         self._display_deck(deck_name=deck_name, filter_name=filter_name)
         with ui.row():
             self._display_note_filter_radio(deck_name=deck_name)
@@ -118,7 +132,7 @@ class EditDeckTabContent(TabContent):
         If corner case, change the user data with sane deck name, and return `None`.
         If not deck in the list anymore, display the no-deck warning.
         """
-        current_last_selected_deck = self.om_user_data.get(LAST_SELECTED_DECK_KEY)
+        current_last_selected_deck = self._last_selected_deck_data.state
         deck_list = self._deck_manipulator.list_decks()
         # Handle the case there is no deck anymore
         if len(deck_list) == 0:
@@ -129,17 +143,8 @@ class EditDeckTabContent(TabContent):
         if (current_last_selected_deck == LAST_SELECTED_DECK_DEFAULT) | (
             current_last_selected_deck not in deck_list
         ):
-            self.om_user_data.update({LAST_SELECTED_DECK_KEY: deck_list[0]})
-        return self.om_user_data[LAST_SELECTED_DECK_KEY]
-
-    def _get_current_filter_ui_name(self, deck_name: DeckName) -> OmDeckFilterUiLabel:
-        """Get current filter name for deck, assigning 'all notes' if none"""
-        # If no prefered filter for that deck in the cache, create one
-        if deck_name not in self.om_user_data[DECK_UI_FILTER_CORR_KEY]:
-            self.om_user_data[DECK_UI_FILTER_CORR_KEY][
-                deck_name
-            ] = _AVAILABLE_DECK_FILTERS.all_notes.ui_label
-        return self.om_user_data[DECK_UI_FILTER_CORR_KEY][deck_name]
+            self._last_selected_deck_data.state = deck_list[0]
+        return self._last_selected_deck_data.state
 
     def _get_card(self, deck_name: DeckName, card_index: int) -> Card:
         """Get card, throw an error if not present"""
@@ -169,7 +174,7 @@ class EditDeckTabContent(TabContent):
             options=self._deck_manipulator.list_decks(),
             on_change=lambda e: self._actions_on_deck_selection(deck_name=e.value),
         ).bind_value(
-            target_object=self.om_user_data, target_name=LAST_SELECTED_DECK_KEY
+            target_object=self._last_selected_deck_data, target_name="state"
         ).props(
             "outlined"
         )
@@ -177,7 +182,9 @@ class EditDeckTabContent(TabContent):
     def _actions_on_deck_selection(self, deck_name: str) -> None:
         """Update the displayed deck and the selected filter"""
         deck_name = self._get_current_deck_name()
-        filter_name = self._get_current_filter_ui_name(deck_name=deck_name)
+        filter_name = self._deck_ui_filter_corr_data.get_filter_for_deck(
+            deck_name=deck_name
+        )
         # Update the displayed deck
         self._display_deck.refresh(deck_name=deck_name, filter_name=filter_name)
         # Update the displayed filter button
@@ -258,7 +265,9 @@ class EditDeckTabContent(TabContent):
         self._display_deck_selector.refresh()
         # Update deck display
         deck_name = self._get_current_deck_name()
-        filter_name = self._get_current_filter_ui_name(deck_name=deck_name)
+        filter_name = self._deck_ui_filter_corr_data.get_filter_for_deck(
+            deck_name=deck_name
+        )
         self._display_deck.refresh(deck_name=deck_name, filter_name=filter_name)
         self._display_note_filter_radio.refresh(deck_name=deck_name)
         self._display_field_editor.refresh(
@@ -269,10 +278,6 @@ class EditDeckTabContent(TabContent):
     def _display_note_filter_radio(self, deck_name: DeckName) -> None:
         """Display radio filter determining which cards to keep (all, new, in study)"""
         # If no prefered filter for that deck in the cache, create one
-        if deck_name not in self.om_user_data[DECK_UI_FILTER_CORR_KEY]:
-            self.om_user_data[DECK_UI_FILTER_CORR_KEY][
-                deck_name
-            ] = _AVAILABLE_DECK_FILTERS.all_notes.ui_label
         ui.radio(
             options=list(filter_label_obj_corr.keys()),
             on_change=lambda e, deck_name=deck_name: self._actions_on_filter_selection(
@@ -307,9 +312,8 @@ class EditDeckTabContent(TabContent):
 class _FieldEditor:
     """Display the field edition system (incl mnemonic generation)"""
 
-    # TODO: mettre la logique (montrer/pas montrer) dans la fonction mère. Une fonction
-    # refreshable dans la fonction mère fera le boulot de montrer/pas montrer.
-    # TODO: mettre deck name & selected_card_index en argument du init
+    # TODO: put outside the choice of the mnemonic type, and reinstantiate all objects
+    # when the mnemonic type is changed.
 
     def __init__(self, card: Card, whole_tab: EditDeckTabContent):
         # Assignments to self
@@ -338,12 +342,9 @@ class _FieldEditor:
             self._display_mnem_type_selector()
             self._display_mnem_type_descriptor()
         # Generation controller
-        self._display_mnemonic_configurator(
-            note_type=self._note_type,
-            field_names=self._note_field_names,
-        )
+        self._display_settings_icon()
         # Generation trigger
-        # TODO
+        self._display_generation_icon()
         # Field editors
         self._display_individual_field_editors(card=self._card)
 
@@ -372,7 +373,6 @@ class _FieldEditor:
         )
 
     def _actions_on_changing_mnem_type(self, mnem_name: MnemonicUiLabel) -> None:
-        # TODO: put that into self, and update everytime the mnemonic type is changed.
         self._mnemn_note_map_data = self._get_mnem_note_field_mapper(
             mnem_name=mnem_name
         )
@@ -384,12 +384,11 @@ class _FieldEditor:
             backward=lambda s: self._available_mnemn_by_name[s].ui_descr,
         )
 
-    @ui.refreshable
-    def _display_mnemonic_configurator(
+    def _display_settings_icon(
         self,
-        note_type: NoteType,
-        field_names: list[NoteFieldName],
     ) -> None:
+        note_type = self._note_type
+        field_names = self._note_field_names
         ui.button(
             icon="settings",
             on_click=lambda note_type=note_type, field_names=field_names: self._actions_on_settings_icon_click(  # noqa: E501
@@ -404,7 +403,7 @@ class _FieldEditor:
         # Clean up the dialog box, and prepare the new one
         self._whole_tab._dialog.clear()
         with self._whole_tab._dialog, ui.card():
-            self._fill_generator_conf_dialog(
+            self._fill_settings_dialog(
                 note_type=note_type,
                 note_field_names=note_field_names,
                 mnem_name=self._current_mnem_name,
@@ -412,7 +411,7 @@ class _FieldEditor:
         # Disiplay the dialog box
         self._whole_tab._dialog.open()
 
-    def _fill_generator_conf_dialog(
+    def _fill_settings_dialog(
         self,
         note_type: NoteType,
         note_field_names: list[NoteFieldName],
@@ -453,6 +452,28 @@ class _FieldEditor:
                     target_name=prompt_param_name,
                 )
 
+    def _display_generation_icon(
+        self,
+    ) -> None:
+        ui.button(
+            icon="play_circle",
+            on_click=self._actions_on_generation_icon_click,
+        ).tooltip("Generate the mnemonic")
+
+    def _actions_on_generation_icon_click(
+        self,
+    ) -> None:
+        # Clean up the dialog box, and prepare the new one
+        self._whole_tab._dialog.clear()
+        with self._whole_tab._dialog, ui.card():
+            self._fill_generation_dialog_box()
+        # Disiplay the dialog box
+        self._whole_tab._dialog.open()
+
+    def _fill_generation_dialog_box(self) -> None:
+        # TODO: implement through GenerationInterface
+        pass
+
     @ui.refreshable
     def _display_individual_field_editors(self, card: Card) -> None:
         """Display the card editor given a card"""
@@ -463,10 +484,18 @@ class _FieldEditor:
             ).props("outlined")
         # Display a save button, with a save mechanism
         ui.button(
-            text="Save note",
+            text="Save changes",
             on_click=ft.partial(
                 self._whole_tab._deck_manipulator.save_note,
                 note_id=card.note_id,
                 note_fields=note_fields,
             ),
         )
+
+
+class GenerationInterface:
+    def __init__(self, mnem_name: MnemonicUiLabel) -> None:
+        pass
+
+    def display(self) -> None:
+        pass
