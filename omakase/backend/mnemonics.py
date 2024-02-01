@@ -13,7 +13,10 @@ from omakase.backend.om_user import (
     GENOUT_NOTE_ASSOCS_KEY,
     MNEM_NOTE_ASSOCS_KEY,
     PROMPT_NOTE_ASSOCS_KEY,
+    CachedUserDataPoint,
+    point_to_om_user_subcache,
 )
+from omakase.observer_logic import Observable
 
 
 class PromptFieldTypeError(Exception):
@@ -147,13 +150,13 @@ class MnemConf:
     prompt_param_field_ui_descr: dict[PromptParamName, PromptParamFieldUiConf]
 
 
-class MnemonicNoteFieldMapData:
+class MnemonicNoteFieldMapData(Observable):
     def __init__(
         self,
         prompt_params_class: Type[PromptParams],
         note_type: NoteType,
         note_field_names: list[NoteFieldName],
-        om_user_data: dict,
+        om_username: str,
     ):
         """OM user data mapping mnemonic fields (prompt, output) to the note fields
 
@@ -174,63 +177,54 @@ class MnemonicNoteFieldMapData:
             genout_is_associated_to_note_field()
         """
         # Assign params to self
-        self._om_user_data = om_user_data
-        self._note_type = note_type
+        self._om_username = om_username
         self._note_field_names = note_field_names
         self._prompt_params_class = prompt_params_class
-        self._prompt_params_type = prompt_params_class.__qualname__
-        # init
-        self._init_om_user_data_if_not()
-        self.prompt_note_assocs: dict[
+        # Pointer
+        self._assocs_root_keys = [  # Root keys to all associations
+            MNEM_NOTE_ASSOCS_KEY,
+            note_type,
+            prompt_params_class.__qualname__,
+        ]
+        self._prompt_note_assocs: dict[
             PromptParamName, Optional[NoteFieldName]
         ] = self._point_to_prompt_note_assocs()
-        # self.genout_note_assocs: Optional[
-        #     NoteFieldName
-        # ] = self._point_to_genout_note_assocs()
         # Sanitize
         self._sanitize_prompt_note_assocs()
-        self._sanitize_genout_note_assocs()
 
     def genout_is_associated_to_note_field(self) -> bool:
         """Is the generation output associated to an (existing) note field?"""
         return self.genout_note_assocs in self._note_field_names
 
-    @property
-    def genout_note_assocs(self) -> Optional[NoteFieldName]:
-        return self._om_user_data[MNEM_NOTE_ASSOCS_KEY][self._note_type][
-            self._prompt_params_type
-        ][GENOUT_NOTE_ASSOCS_KEY]
+    def point_to_genout_note_field_dp(self) -> CachedUserDataPoint:
+        # TODO docstr
+        dp = CachedUserDataPoint(
+            om_username=self._om_username,
+            root_keys=self._assocs_root_keys,
+            subject_key=GENOUT_NOTE_ASSOCS_KEY,
+            default_value=None,
+        )
+        return dp
 
-    @genout_note_assocs.setter
-    def genout_note_assocs(self, value: NoteFieldName) -> None:
-        self._om_user_data[MNEM_NOTE_ASSOCS_KEY][self._note_type][
-            self._prompt_params_type
-        ][GENOUT_NOTE_ASSOCS_KEY] = value
+    def point_to_prompt_note_assoc_dp(
+        self, prompt_param_name: str
+    ) -> CachedUserDataPoint:
+        # TODO docstr
+        dp = CachedUserDataPoint(
+            om_username=self._om_username,
+            root_keys=self._assocs_root_keys + [PROMPT_NOTE_ASSOCS_KEY],
+            subject_key=prompt_param_name,
+            default_value=None,
+        )
+        return dp
 
     def _point_to_prompt_note_assocs(
         self,
     ) -> dict[PromptParamName, Optional[NoteFieldName]]:
-        return self._om_user_data[MNEM_NOTE_ASSOCS_KEY][self._note_type][
-            self._prompt_params_type
-        ][PROMPT_NOTE_ASSOCS_KEY]
-
-    def _init_om_user_data_if_not(self) -> None:
-        if MNEM_NOTE_ASSOCS_KEY not in self._om_user_data.keys():
-            self._om_user_data[MNEM_NOTE_ASSOCS_KEY] = dict()
-        assoc_storage_root = self._om_user_data[MNEM_NOTE_ASSOCS_KEY]
-        # Structure for this specific note type and prompt param type
-        if self._note_type not in assoc_storage_root.keys():
-            assoc_storage_root[self._note_type] = dict()
-        if self._prompt_params_type not in assoc_storage_root[self._note_type].keys():
-            assoc_storage_root[self._note_type][self._prompt_params_type] = dict()
-        # Adding the PROMPT_NOTE_ASSOCS_KEY and GENOUT_NOTE_ASSOCS_KEY layers
-        current_assoc = self._om_user_data[MNEM_NOTE_ASSOCS_KEY][self._note_type][
-            self._prompt_params_type
-        ]
-        if PROMPT_NOTE_ASSOCS_KEY not in current_assoc.keys():
-            current_assoc[PROMPT_NOTE_ASSOCS_KEY] = dict()
-        if GENOUT_NOTE_ASSOCS_KEY not in current_assoc.keys():
-            current_assoc[GENOUT_NOTE_ASSOCS_KEY] = None
+        return point_to_om_user_subcache(
+            om_username=self._om_username,
+            keys=self._assocs_root_keys + [PROMPT_NOTE_ASSOCS_KEY],
+        )
 
     def _sanitize_prompt_note_assocs(self) -> None:
         """Ensure the names of the note fields stored in memory indeed exist for that
@@ -241,31 +235,15 @@ class MnemonicNoteFieldMapData:
             prompt_params_class=self._prompt_params_class
         )
         # check for existing prompt param names that exist in user data but shouldn't
-        for prompt_param in self.prompt_note_assocs.keys():
+        for prompt_param in self._prompt_note_assocs.keys():
             if prompt_param not in str_prompt_param_names:
-                del self.prompt_note_assocs[prompt_param]
-        # Check for prompt param names that should be in the user data but aren't
-        for prompt_param in str_prompt_param_names:
-            if prompt_param not in self.prompt_note_assocs.keys():
-                self.prompt_note_assocs[prompt_param] = None
+                del self._prompt_note_assocs[prompt_param]
         # check for existing prompt param associated to an imaginary NoteFieldName
-        for prompt_param in self.prompt_note_assocs.keys():
-            if self.prompt_note_assocs[prompt_param] not in (
+        for prompt_param in self._prompt_note_assocs.keys():
+            if self._prompt_note_assocs[prompt_param] not in (
                 [None] + self._note_field_names
             ):
-                self.prompt_note_assocs[prompt_param] = None
-
-    def _sanitize_genout_note_assocs(self) -> None:
-        """Ensure the generation output is either None, or associated to an existing
-        note field.
-        """
-        current_assoc = self._om_user_data[MNEM_NOTE_ASSOCS_KEY][self._note_type][
-            self._prompt_params_type
-        ]
-        genout_note_assocs = current_assoc[GENOUT_NOTE_ASSOCS_KEY]
-        if genout_note_assocs is not None:
-            if genout_note_assocs not in self._note_field_names:
-                current_assoc[GENOUT_NOTE_ASSOCS_KEY] = None
+                self._prompt_note_assocs[prompt_param] = None
 
 
 # ========================

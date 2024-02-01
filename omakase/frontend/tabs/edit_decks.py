@@ -64,8 +64,6 @@ class EditDeckTabContent(TabContent):
     """UI for editing the content of the deck"""
 
     def __init__(self) -> None:
-        # Names for assignment
-        # self._SELECTED_ROW_ATTR_NAME = "_selected_row"
         # Assignment
         self.web_user_data: dict = point_to_web_user_data()
         self.om_username: str = self.web_user_data.get(OM_USERNAME_KEY)
@@ -362,7 +360,7 @@ class _FieldEditor:
             ].prompt_param_class,
             note_type=self._note_type,
             note_field_names=self._note_field_names,
-            om_user_data=self._whole_tab.om_user_data,
+            om_username=self._whole_tab.om_username,
         )
 
     def _actions_on_changing_mnem_type(self, mnem_name: MnemonicUiLabel) -> None:
@@ -418,7 +416,8 @@ class _FieldEditor:
         ui.select(
             options=[None] + note_field_names,
         ).bind_value(
-            target_object=self._mnemn_note_map_data, target_name="genout_note_assocs"
+            target_object=self._mnemn_note_map_data.point_to_genout_note_field_dp(),
+            target_name="value",
         )
         ui.markdown("### Pre-fill from *(optional)*")
         prompt_param_class = self._available_mnemn_by_name[mnem_name].prompt_param_class
@@ -441,8 +440,10 @@ class _FieldEditor:
                 ui.select(
                     options=[None] + note_field_names,
                 ).bind_value(
-                    target_object=self._mnemn_note_map_data.prompt_note_assocs,
-                    target_name=prompt_param_name,
+                    target_object=self._mnemn_note_map_data.point_to_prompt_note_assoc_dp(  # noqa: E501
+                        prompt_param_name=prompt_param_name
+                    ),
+                    target_name="value",
                 )
 
     def _display_generation_icon(
