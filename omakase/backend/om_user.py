@@ -119,54 +119,6 @@ class CachedUserDataPoint:
             self._root_dict[self._subject_key] = self._default_value
 
 
-class CachedUserDataDict:
-    """User-related data point, synced with app.storage.general
-
-    Data is accessible and editable through the `value` attribute.
-    This construct simplifies the use of nicegui's `bind_*` methods.
-    """
-
-    def __init__(
-        self,
-        om_username: str,
-        root_keys: list[str],
-        subject_key: str,
-        default_value: Any,
-    ) -> None:
-        # Initialization
-        self._default_value = default_value
-        self._subject_key = subject_key
-        # Pointer to user cache
-        self._user_cache = point_to_om_user_cache(om_username=om_username)
-        # Get root dict
-        self._root_dict = self._resolve_root_dict(root_keys=root_keys)
-        # Sanitization
-        self._handle_missing_subject_key()
-
-    @property
-    def value(self) -> Any:
-        return self._root_dict[self._subject_key]
-
-    def _resolve_root_dict(self, root_keys: str) -> dict:
-        """Point to the part of the user  cache described by root_keys
-
-        Create non-existing dict on the way"""
-        pointer = self._user_cache
-        for k in root_keys:
-            if k not in pointer:
-                pointer[k] = {}
-            pointer = pointer[k]
-        return pointer
-
-    @value.setter
-    def value(self, value: Any) -> None:
-        self._root_dict[self._subject_key] = value
-
-    def _handle_missing_subject_key(self) -> None:
-        if self._subject_key not in self._root_dict:
-            self._root_dict[self._subject_key] = self._default_value
-
-
 # ========================
 # Subject - implementation
 # ========================

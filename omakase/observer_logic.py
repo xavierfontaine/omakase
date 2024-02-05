@@ -1,6 +1,7 @@
 """
 Abstract classes for the observer pattern
 """
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Callable
 
@@ -19,43 +20,30 @@ class Observer:
     `self._expected_subject_handler_name`.
     """
 
-    pass
+    @abstractmethod
+    def update(self) -> None:
+        """Handle notifications from the observable"""
+        pass
 
 
 # ===========================
 # Observer pattern - subjects
 # ===========================
-@dataclass
-class Subscription:
-    """Subscription contract of an Observer with an Observable
-
-    Args:
-        method: method to call upon notification by the Observable. Should take the
-        observable as an argument.
-    """
-
-    method: Callable
-
-
 class Observable:
-
-
-    def attach(self, subscription: Subscription) -> None:
+    def attach(self, observer: Observer) -> None:
         """Attach a new observer"""
         try:
-            self._subscriptions
-            print("self._subscriptions.append(subscription)")
+            self._observers
         except AttributeError:
-            self._subscriptions = []
-        self._subscriptions.append(subscription)
-
+            self._observers = []
+        self._observers.append(observer)
 
     def notify(self) -> None:
         """Notifies the observers of a change in state"""
         try:
-            subscriptions = self._subscriptions
+            observers = self._observers
         except AttributeError:
-            self._subscriptions = []
-        subscriptions = self._subscriptions
-        for subscription in subscriptions:
-            subscription.method()
+            self._observers = []
+        observers = self._observers
+        for observer in observers:
+            observer.update()
