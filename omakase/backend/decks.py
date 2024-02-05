@@ -2,7 +2,6 @@
 Query and edit decks
 """
 from dataclasses import asdict, dataclass, fields
-from typing import Optional
 
 from omakase.annotations import (
     DeckName,

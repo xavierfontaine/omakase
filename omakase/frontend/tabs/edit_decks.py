@@ -1,4 +1,13 @@
-# Short-run
+# TODO All observables need to notify upon change in data.
+# TODO To simplify the process down the road, I can create meta-observables
+# for different types of data (Dict, List, Point.) For dict and list, I can
+# rely on the abstract types of nicegui.
+# TODO But at any rate, stop abstracting... It's been weeks already. I can write a note
+# on my decision.
+
+# Observables must use notify.
+# Upon extension of the code, I might have to rely to the architecture proposed by
+# nicegui for recursive notifications, but that would require some work.
 # TODO: remove useless references
 # Mid run
 # TODO: arguments of data mediator should only be observables.
@@ -8,38 +17,25 @@
 """
 Deck edition tab
 
-Mix observer and mediator patterns
-* Elements of the UI (Observer) subscribe to underlying data (Observable) to update upon
-notification of their changes
-* When UI elements change data, they instruct the mediator (_DataMediator) to handle
-the consquences:
-  - Propagate changes across data (Observables). For instance, a change in deck entails
-    a change in cards.
-  - Notify UI elements (Observers) of all the changes.
+Developer note
+--------------
+Relies on an Observer/Observable pattern to send notifications about changes in
+data/state. Notifications are sent to two groups of subscribers:
+- A Mediator, whose role is to update other relevant data (expected chain reaction)
+- UI components, that will usually refresh upon changes in data
 
-When adding a new data (Observable) element:
-1/ Define the Observable logic.
-    - Inherit from the Observable class.
-    - As much as possible, point to the data itself through the CachedUserDataPoint.
-      This simplifies the use of dict-like storages (a-la-nicegui), as well as the use
-      of binding functions (the key is always 'value'.)
-2/ In mediator, define a `handler_` function that is reponsible for changing other
-   Observables when this Observable change, as well as calling the `notify` method
-   for the current Observable and the changed Observables.
+Uppon modification of a data point, two actions happen
 
-When adding a new UI element:
-1/ Define the Observer logic
-    - Inherit from the Observer class.
-    - Subscribe to the right Observables (those whose change should trigger a UI
-      update.)
-    - In self, define the `update` function that determines how to update upon
-      notification from the Observables.
-2/ Define the action logic
-- Upon user actions in UI,
-- Determine what should happen upon user actions ()
+           notify  ┌────────────┐  modify
+    data ─────────►│DataMediator│ ───────► other data
+(Observable)       │ (Observer) │         (Observable)
+                   └────────────┘
 
-This architecture is more complicated than it should. A simplification should account
-for the use of CachedUserDataPoint objects.
+
+           notify  ┌────────────┐  modify
+    data ─────────►│UI component├──────┐
+(Observable)       │ (Observer) │ ◄────┘
+                   └────────────┘
 """
 import functools as ft
 from typing import Optional
@@ -66,7 +62,12 @@ from omakase.backend.om_user import DeckFilterCorrObl, LastSelectedDeckObl
 from omakase.exceptions import display_exception
 from omakase.frontend.tabs.utils import TabContent
 from omakase.frontend.web_user import OM_USERNAME_KEY, point_to_web_user_data
-from omakase.observer_logic import Observable, Observer
+from omakase.observer_logic import (
+    Observable,
+    ObservableList,
+    ObservablePrimitive,
+    Observer,
+)
 from omakase.om_logging import logger
 
 # =========
@@ -86,47 +87,41 @@ PromptSettings = Mock()
 # ============
 # Side objects
 # ============
-class _CurrentCardsObl(Observable):
-    """Observable list of cards"""
-
-    def __init__(self, cards: Optional[list[Card]]) -> None:
-        self.value: list[Card] = cards if cards is not None else []
+# Definiting observables by name for clarity
+class DeckNamesObl(ObservableList):
+    pass
 
 
-class _AvailableDeckNamesObl(Observable):
-    """List of available deck names"""
-
-    def __init__(self, deck_names: Optional[list[DeckName]]) -> None:
-        self.value: list[DeckName] = deck_names if deck_names is not None else []
+class CurrentCardsObl(ObservableList):
+    pass
 
 
-class _CurrentCardIdxObl(Observable):
-    """Observable index for the current card
-
-    None if no card"""
-
-    def __init__(self, card_idx: Optional[int]) -> None:
-        self.value: Optional[int] = card_idx
+class CurrentCardIdxObl(ObservablePrimitive):
+    pass
 
 
-class _DataMediator:
+# ============
+# DataMediator
+# ============
+# Handle chain reaction across observables (ie, change data when other data change)
+# TODO:
+# Garder le mécanisme de souscription actuel, de sorte que les éléments d'UI sont
+# updatés quand les bonnes données sont updatées
+# Rajouter un mécanisme de souscription, qui est celui de DataMediator. Quand l'état
+# d'une  donnée changée, ça change l'état des autres données.
+class _DataMediator(Observer):
     def __init__(
         self,
         deck_manipulator: DecksManipulator,
-        deck_names_obl: _AvailableDeckNamesObl,
+        deck_names_obl: DeckNamesObl,
         last_selected_deck_obl: LastSelectedDeckObl,
         deck_ui_filter_corr_obl: DeckFilterCorrObl,
-        current_cards_obl: _CurrentCardsObl,
-        current_card_idx_obl: _CurrentCardIdxObl,
+        current_cards_obl: ObservableList,
+        current_card_idx_obl: ObservablePrimitive,
     ) -> None:
-        """Cascade changes in data and notify accordingly
+        """Change data upon notification of change in other data
 
-        Used to notify a change in data layer {l}
-        - Responsible for changing layers {l+i} accordingly.
-        - Responsible for sending notifications regarding  {l} and {l+i}
-        For each data layer {l}, a method is responsible for the above.
-
-        Layers are, in order (with parallelism)
+        Data Layers are, in order (with parallelism)
         - list of deck names           |
                                        | - Association between deck names and ui filters
         - Name of last selected deck   |
@@ -142,57 +137,54 @@ class _DataMediator:
         self._current_cards_obl = current_cards_obl
         self._current_card_idx_obl = current_card_idx_obl
 
-    def handle_deck_names_change(self) -> None:
+    def update(self, observable: Observable) -> None:
+        """Implements the update logic of class Observer"""
+        if isinstance(observable, DeckNamesObl):
+            self._handle_deck_names_change()
+        elif isinstance(observable, LastSelectedDeckObl):
+            self._handle_last_deck_name_change()
+        elif isinstance(observable, DeckFilterCorrObl):
+            self._handle_deck_filter_corr_change()
+        elif isinstance(observable, CurrentCardsObl):
+            self._handle_current_cards_change()
+        elif isinstance(observable, CurrentCardIdxObl):
+            self._handle_current_card_idx_change()
+        else:
+            raise NotImplementedError(
+                f"{self.__class__.__name__} has no handler for observable"
+                f" {observable.clas__class__.__name__}"
+            )
+
+    def _handle_deck_names_change(self) -> None:
         """handle change in deck_names_obl"""
         # Update next layers
         self._sanitize_current_deck_name()
-        self._update_cards()
-        self._current_card_idx_obl.value = None
-        # Notify current and next layers
-        self._deck_names_obl.notify()
-        # TODO: make sure that nothing is displayed if that list has length 0
-        self._current_cards_obl.notify()
-        self._current_card_idx_obl.notify()
 
-    def handle_last_deck_name_change(self) -> None:
+    def _handle_last_deck_name_change(self) -> None:
         # Update folnextyers
         self._update_cards()
-        self._current_card_idx_obl.value = None
-        # Notify current and next layers
-        self._last_selected_deck_obl.notify()
-        self._current_cards_obl.notify()
-        self._current_card_idx_obl.notify()
 
-    def handle_deck_filter_corr_change(self) -> None:
+    def _handle_deck_filter_corr_change(self) -> None:
         # Update next layers
         self._update_cards()
-        self._current_card_idx_obl.value = None
-        # Notify current and next layers
-        self._deck_ui_filter_corr_obl.notify()
-        self._current_cards_obl.notify()
-        self._current_card_idx_obl.notify()
 
-    def handle_current_cards_change(self) -> None:
+    def _handle_current_cards_change(self) -> None:
         # Update next layers
-        self._current_card_idx_obl.value = None
-        # Notify current and next layers
-        self._current_cards_obl.notify()
-        self._current_card_idx_obl.notify()
+        self._current_card_idx_obl.data = None
 
-    def handle_current_card_idx_change(self) -> None:
+    def _handle_current_card_idx_change(self) -> None:
         # Update next layers
-        # Notify current and next layers
-        self._current_card_idx_obl.notify()
+        pass
 
     def _update_cards(self) -> None:
         """Update cards to match the current deck and its filter"""
-        deck_name = self._last_selected_deck_obl.deck_name_dp.value
+        deck_name = self._last_selected_deck_obl.data.value
         cards = _get_cards(
             deck_name=deck_name,
             deck_filter_corr_obl=self._deck_ui_filter_corr_obl,
             deck_manipulator=self._deck_manipulator,
         )
-        self._current_cards_obl.value = cards
+        self._current_cards_obl.data = cards
 
     def _sanitize_current_deck_name(self):
         """Sanitize current deck
@@ -200,8 +192,8 @@ class _DataMediator:
         Handle the special cases where no deck name is stored in memory, or if that
         deck doesn't exist anymore.
         """
-        deck_list = self._deck_names_obl.value
-        deck_name_dp = self._last_selected_deck_obl.deck_name_dp
+        deck_list = self._deck_names_obl.data
+        deck_name_dp = self._last_selected_deck_obl.data
         if (deck_name_dp.value is None) | (deck_name_dp.value not in deck_list):
             if len(deck_list) > 0:
                 deck_name_dp.value = deck_list[0]
@@ -236,20 +228,30 @@ class EditDeckTabContent(TabContent):
         # Initializations
         self._dialog = ui.dialog()
         # Observables
-        self._last_selected_deck_obl = LastSelectedDeckObl(
-            om_username=self.om_username)
-        self._deck_ui_filter_corr_obl = DeckFilterCorrObl(
-            om_username=self.om_username)
-        self._deck_names_obl = _AvailableDeckNamesObl(
-            deck_names=self._deck_manipulator.list_decks()
+        self._last_selected_deck_obl = LastSelectedDeckObl(om_username=self.om_username)
+        self._deck_ui_filter_corr_obl = DeckFilterCorrObl(om_username=self.om_username)
+        self._deck_names_obl = DeckNamesObl(data=self._deck_manipulator.list_decks())
+        self._current_cards_obl = CurrentCardsObl(data=None)
+        self._current_card_idx_obl = CurrentCardIdxObl(data=None)
+        # Observers
+        self._deck_selector_obr = _DeckSelector(
+            deck_names_obl=self._deck_names_obl,
+            last_selected_deck_obl=self._last_selected_deck_obl,
+            curr_card_idx_obl=self._current_card_idx_obl,
         )
-        self._current_cards_obl = _CurrentCardsObl(
-            cards=None
-        )  # will be initiated on # initial refresh of card displayer
-        self._current_card_idx_obl = _CurrentCardIdxObl(card_idx=None)
+        self._deck_displayer_obr = _DeckDisplayer(
+            current_cards_obl=self._current_cards_obl,
+            curr_card_idx_obl=self._current_card_idx_obl,
+            last_selected_deck_obl=self._last_selected_deck_obl,
+            deck_ui_filter_corr_obl=self._deck_ui_filter_corr_obl,
+        )
+        self._filter_selector_obr = _FilterSelector(
+            last_selected_deck_obl=self._last_selected_deck_obl,
+            deck_ui_filter_corr_obl=self._deck_ui_filter_corr_obl,
+        )
         # Mediator (responsible for adjusting observables wrt each others and for
         # handling their notifications)
-        self._mediator = _DataMediator(
+        self._mediator_obr = _DataMediator(
             deck_manipulator=self._deck_manipulator,
             deck_names_obl=self._deck_names_obl,
             last_selected_deck_obl=self._last_selected_deck_obl,
@@ -257,24 +259,18 @@ class EditDeckTabContent(TabContent):
             current_cards_obl=self._current_cards_obl,
             current_card_idx_obl=self._current_card_idx_obl,
         )
-        # Observers
-        self._deck_selector_obr = _DeckSelector(
-            deck_names_obl=self._deck_names_obl,
-            last_selected_deck_obl=self._last_selected_deck_obl,
-            curr_card_idx_obl=self._current_card_idx_obl,
-            mediator=self._mediator,
-        )
-        self._deck_displayer = _DeckDisplayer(
-            current_cards_obl=self._current_cards_obl,
-            curr_card_idx_obl=self._current_card_idx_obl,
-            last_selected_deck_obl=self._last_selected_deck_obl,
-            deck_ui_filter_corr_obl=self._deck_ui_filter_corr_obl,
-            mediator=self._mediator,
-        )
-        # Subscriptions - _deck_names_obl
+        # Subscription only to data impact the UI element. The mediator handles the rest
+        self._deck_names_obl.attach(self._mediator_obr)
         self._deck_names_obl.attach(self._deck_selector_obr)
-        # Subscriptions - _current_cards_obl
-        self._current_cards_obl.attach(self._deck_displayer)
+        self._last_selected_deck_obl.attach(self._mediator_obr)
+        self._last_selected_deck_obl.attach(self._filter_selector_obr)
+        self._deck_ui_filter_corr_obl.attach(self._mediator_obr)
+        self._deck_ui_filter_corr_obl.attach(self._filter_selector_obr)
+        self._current_cards_obl.attach(self._mediator_obr)
+        self._current_cards_obl.attach(self._deck_displayer_obr)
+        self._current_card_idx_obl.attach(self._mediator_obr)
+        # [Slight unsafe] To align all data and UI elements, we trigger a chain reaction
+        self._last_selected_deck_obl.notify()
 
     def _a_deck_exists(self) -> bool:
         return self._deck_manipulator.list_decks() != []
@@ -292,8 +288,9 @@ class EditDeckTabContent(TabContent):
             self._display_all_if_deck_exists()
 
     def _display_all_if_deck_exists(self):
-        self._deck_selector_obr.display_deck_selector()
-        self._deck_displayer.display_deck()
+        self._deck_selector_obr.display()
+        self._deck_displayer_obr.display()
+        self._filter_selector_obr.display()
 
     def __display_all_if_deck_exists(self):
         """Display when logged in and a deck exists"""
@@ -315,8 +312,7 @@ class EditDeckTabContent(TabContent):
         # Select the fields that relate to the important items for that mnem style.
         # [Save/use the last] fields for that card type > mnem style.
         # Edit pane (w. edit save functionality)
-        self._display_field_editor(
-            selected_card_index=None, deck_name=deck_name)
+        self._display_field_editor(selected_card_index=None, deck_name=deck_name)
 
     def __get_current_deck_name(self) -> Optional[DeckName]:
         """Get current deck name from user data
@@ -329,12 +325,12 @@ class EditDeckTabContent(TabContent):
         if len(deck_list) == 0:
             self._display_if_logged.refresh()
             return None
-        return deck_name_dp.value
+        return deck_name_dp.value  # noqa: F821
 
     def _get_card(self, card_index: int) -> Card:
         """Get card, throw an error if not present"""
         try:
-            card = self._current_cards_obl.value[card_index]
+            card = self._current_cards_obl.data[card_index]
         # ... we throw an exception
         except IndexError:
             logger.exception(
@@ -421,9 +417,8 @@ class _DeckSelector(Observer):
     def __init__(
         self,
         last_selected_deck_obl: LastSelectedDeckObl,
-        deck_names_obl: _AvailableDeckNamesObl,
-        curr_card_idx_obl: _CurrentCardIdxObl,
-        mediator: _DataMediator,
+        deck_names_obl: DeckNamesObl,
+        curr_card_idx_obl: CurrentCardIdxObl,
     ):
         """Deck selector
 
@@ -433,10 +428,9 @@ class _DeckSelector(Observer):
         self._last_selected_deck_obl = last_selected_deck_obl
         self._deck_names_obl = deck_names_obl
         self._curr_card_idx_obl = curr_card_idx_obl
-        self._mediator = mediator
 
     @ui.refreshable
-    def display_deck_selector(self) -> None:
+    def display(self) -> None:
         """
         Display deck selector
 
@@ -447,31 +441,23 @@ class _DeckSelector(Observer):
         """
         # Display
         ui.select(
-            options=self._deck_names_obl.value,
-            on_change=self._actions_on_deck_change,
+            options=self._deck_names_obl.data,
         ).bind_value(
-            target_object=self._last_selected_deck_obl.deck_name_dp,
+            target_object=self._last_selected_deck_obl.data,
             target_name="value",
-        ).props(
-            "outlined"
-        )
+        ).props("outlined")
 
-    def update(self) -> None:
-        self.display_deck_selector.refresh()
-
-    def _actions_on_deck_change(self) -> None:
-        # Notify that deck has changed
-        self._mediator.handle_last_deck_name_change()
+    def update(self, observable: Observable) -> None:
+        self.display.refresh()
 
 
 class _DeckDisplayer(Observer):
     def __init__(
         self,
-        current_cards_obl: _CurrentCardsObl,
-        curr_card_idx_obl: _CurrentCardIdxObl,
+        current_cards_obl: CurrentCardsObl,
+        curr_card_idx_obl: CurrentCardIdxObl,
         last_selected_deck_obl: LastSelectedDeckObl,
         deck_ui_filter_corr_obl: DeckFilterCorrObl,
-        mediator: _DataMediator,
     ) -> None:
         """Deck displayer and card selector
 
@@ -483,11 +469,10 @@ class _DeckDisplayer(Observer):
         self._curr_card_idx_obl = curr_card_idx_obl
         self._last_selected_deck_obl = last_selected_deck_obl
         self._deck_ui_filter_corr_obl = deck_ui_filter_corr_obl
-        self._mediator = mediator
 
     @ui.refreshable
     # TODO faire de deck_name et filter_name des observeables utilisant le dp
-    def display_deck(self) -> None:
+    def display(self) -> None:
         """Display deck as an aggrid table, assign to self._aggrid_table"""
         # Display cards
         card_fields = get_card_property_names()
@@ -506,22 +491,21 @@ class _DeckDisplayer(Observer):
             }
         ).on(
             type="cellClicked",
-            handler=lambda e, : self._actions_on_agrid_cell_click(
+            handler=lambda e: self._actions_on_agrid_cell_click(
                 selected_card_index=e.args["rowIndex"]
             ),
         )
 
     def _actions_on_agrid_cell_click(self, selected_card_index: int) -> None:
         """Display card editor, prepare generator conf dialog box for display"""
-        self._curr_card_idx_obl.value = selected_card_index
-        self._mediator.handle_current_card_idx_change()
+        self._curr_card_idx_obl.data = selected_card_index
 
     def _get_agrid_rows_from_cards(self) -> list[dict]:
         """Transfom self._cards_obl.cards to agrid rows
 
         The result can be passed to .option["rowData"] to update the aggrid table
         """
-        return [card.get_card_properties() for card in self._cards_obl.value]
+        return [card.get_card_properties() for card in self._cards_obl.data]
 
     def _build_aggrid_mock(self):
         """Build a mock aggrid table for the first run of the interface. The deck button
@@ -531,8 +515,8 @@ class _DeckDisplayer(Observer):
         aggrid_table.options = dict()
         return aggrid_table
 
-    def update(self) -> None:
-        self.display_deck.refresh()
+    def update(self, observable: Observable) -> None:
+        self.display.refresh()
 
 
 class _FilterSelector(Observer):
@@ -540,30 +524,26 @@ class _FilterSelector(Observer):
         self,
         last_selected_deck_obl: LastSelectedDeckObl,
         deck_ui_filter_corr_obl: DeckFilterCorrObl,
-        mediator: _DataMediator,
     ) -> None:
         """Display the filter selection button"""
         self._last_selected_deck_obl = last_selected_deck_obl
         self._deck_ui_filter_corr_obl = deck_ui_filter_corr_obl
-        self._mediator = mediator
 
     @ui.refreshable
     def display(self) -> None:
         """Display radio filter determining which cards to keep (all, new, in study)"""
         # If no prefered filter for that deck in the cache, create one
-        deck_name = self._last_selected_deck_obl.deck_name_dp.value
+        deck_name = self._last_selected_deck_obl.data.value
         filter_name_dp = self._deck_ui_filter_corr_obl.get_filter_dp(
             deck_name=deck_name
         )
         ui.radio(
             options=list(filter_label_obj_corr.keys()),
-            on_change=self._actions_on_filter_selection,
-        ).bind_value(target_object=filter_name_dp, target_name="value").props("inline")
+        ).bind_value(
+            target_object=filter_name_dp, target_name="value"
+        ).props("inline")
 
-    def _actions_on_filter_selection(self) -> None:
-        self._mediator.handle_deck_filter_corr_change()
-
-    def update(self) -> None:
+    def update(self, observable: Observable) -> None:
         self.display.refresh()
 
 
@@ -618,8 +598,7 @@ class _FieldEditor:
     def _display_mnem_type_selector(self) -> None:
         ui.select(
             options=list(self._available_mnemn_by_name.keys()),
-            on_change=lambda e: self._actions_on_changing_mnem_type(
-                mnem_name=e.value),
+            on_change=lambda e: self._actions_on_changing_mnem_type(mnem_name=e.value),
         ).bind_value(target_object=self, target_name="_current_mnem_name").tooltip(
             "select the type of mnemonic for generation"
         )
@@ -709,8 +688,7 @@ class _FieldEditor:
                     .prompt_param_field_ui_descr[prompt_param_name]
                     .ui_explanation
                 )
-                ui.label(f"{prompt_param_ui_name}").tooltip(
-                    prompt_param_ui_expl)
+                ui.label(f"{prompt_param_ui_name}").tooltip(prompt_param_ui_expl)
                 ui.select(
                     options=[None] + note_field_names,
                 ).bind_value(

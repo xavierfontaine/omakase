@@ -3,7 +3,7 @@ Handling of the omakase user data
 
 All data are considered persisted.
 """
-from typing import Any
+from typing import Any, Callable, Optional
 
 from nicegui import app
 
@@ -76,6 +76,8 @@ class CachedUserDataPoint:
 
     Data is accessible and editable through the `value` attribute.
     This construct simplifies the use of nicegui's `bind_*` methods.
+
+    `on_change` defines a function to call upon changes.
     """
 
     def __init__(
@@ -84,10 +86,12 @@ class CachedUserDataPoint:
         root_keys: list[str],
         subject_key: str,
         default_value: Any,
+        on_change: Optional[Callable] = None,
     ) -> None:
         # Initialization
         self._default_value = default_value
         self._subject_key = subject_key
+        self._on_change = on_change
         # Pointer to user cache
         self._user_cache = point_to_om_user_cache(om_username=om_username)
         # Get root dict
@@ -113,10 +117,53 @@ class CachedUserDataPoint:
     @value.setter
     def value(self, value: Any) -> None:
         self._root_dict[self._subject_key] = value
+        if self._on_change is not None:
+            self._on_change()
 
     def _handle_missing_subject_key(self) -> None:
         if self._subject_key not in self._root_dict:
             self._root_dict[self._subject_key] = self._default_value
+
+
+# # ======================
+# # Subject - abstractions
+# # ======================
+# class ObservableCachedDpPointer(Observable):
+#     """Observable pointer to a CachedUserDataPoint
+#
+#     Get the pointer through `get_dp_pointer`. Changes in the value of the
+#     CachedUserDataPoint will trigger `self.notify`
+#     """
+#     def __init__(self, om_username: str) -> None:
+#         self._om_username = om_username
+#
+#     @property
+#     @abstractmethod
+#     def _root_keys(self) -> list[str]:
+#         """As definied in CachedUserDataPoint"""
+#         pass
+#
+#     @property
+#     @abstractmethod
+#     def _subject_key(self) -> str:
+#         """As definied in CachedUserDataPoint"""
+#         pass
+#
+#     @property
+#     @abstractmethod
+#     def _default_value(self) -> Any:
+#         """As definied in CachedUserDataPoint"""
+#         pass
+#
+#     def get_dp_pointer(self, *args, **kwargs) -> CachedUserDataPoint:
+#         dp = CachedUserDataPoint(
+#             om_username=self._om_username,
+#             root_keys=self._root_keys,
+#             subject_key=self._subject_key,
+#             default_value=self._default_value,
+#             on_change=self.notify,
+#         )
+#         return dp
 
 
 # ========================
@@ -129,11 +176,16 @@ class LastSelectedDeckObl(Observable):
     """
 
     def __init__(self, om_username: str) -> None:
-        self.deck_name_dp = CachedUserDataPoint(
-            om_username=om_username,
+        self._om_username = om_username
+
+    @property
+    def data(self) -> CachedUserDataPoint:
+        return CachedUserDataPoint(
+            om_username=self._om_username,
             default_value=None,
             root_keys=[],
             subject_key=LAST_SELECTED_DECK_KEY,
+            on_change=self.notify,
         )
 
 
@@ -158,6 +210,7 @@ class DeckFilterCorrObl(Observable):
             root_keys=[DECK_UI_FILTER_CORR_KEY],
             subject_key=deck_name,
             default_value=default_value,
+            on_change=self.notify,
         )
         return dp
 
