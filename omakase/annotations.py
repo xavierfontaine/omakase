@@ -8,7 +8,7 @@ NoteFieldName = Annotated[str, "Field of a note"]
 NoteFieldValue = Annotated[str, "Value of a note"]
 NoteFieldIdx = Annotated[str, "Index of a field in a note"]
 DeckName = Annotated[str, "Name of a deck"]
-# OmDeckFilterUiLabel = Annotated[str, "UI label of an deck filter"]
+OmDeckFilterUiLabel = Annotated[str, "UI label of an deck filter"]
 AnkiTypeCode = Annotated[int, "Anki type code (0=new, 1=learning, 2=due)"]
 OmDeckFilterCode = Annotated[
     Literal[0, 1, 2], "Code of a deck filter (0 is all, 1 new, 2 in study)"

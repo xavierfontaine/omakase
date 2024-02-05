@@ -1,7 +1,8 @@
 """
 Abstract classes for the observer pattern
 """
-from abc import ABC
+from dataclasses import dataclass
+from typing import Callable
 
 # ============================
 # Observer pattern - observers
@@ -20,50 +21,41 @@ class Observer:
 
     pass
 
-    @property
-    def _SUBJECT_HANDLER_ROOT(self) -> str:
-        """Return the root of the method names for handling new classes"""
-        return "_handle_"
-
-    def _expected_subject_handler_name(self, subject: "Observable") -> str:
-        """Return the expected name for the self method that will handle notifications
-        from `subject`"""
-        return self._SUBJECT_HANDLER_ROOT + subject.__class__.__name__
-
-    def update(self, subject: "Observable") -> None:
-        """Updates based on the nature of `subject`"""
-        expected_handler_name = getattr(
-            self, self._expected_subject_handler_name(subject=subject), None
-        )
-        if expected_handler_name is None:
-            observer_class_name = self.__class__.__name__
-            subject_class_name = subject.__class__.__name__
-            raise NotImplementedError(
-                f"Class {observer_class_name} observes {subject_class_name} but has"
-                " no method to handle notifications from that subject. Please implement"
-                f" method {expected_handler_name}"
-            )
-        else:
-            handler = self.__getattribute__(expected_handler_name)
-            handler(subject)
-
 
 # ===========================
 # Observer pattern - subjects
 # ===========================
-class Observable(ABC):
-    @property
-    def _observers(self) -> set[Observer]:
-        if not hasattr(self, "_observers"):
-            return set()
-        else:
-            self._observers
+@dataclass
+class Subscription:
+    """Subscription contract of an Observer with an Observable
 
-    def attach(self, observer: Observer) -> None:
+    Args:
+        method: method to call upon notification by the Observable. Should take the
+        observable as an argument.
+    """
+
+    method: Callable
+
+
+class Observable:
+
+
+    def attach(self, subscription: Subscription) -> None:
         """Attach a new observer"""
-        self._observers.add(observer)
+        try:
+            self._subscriptions
+            print("self._subscriptions.append(subscription)")
+        except AttributeError:
+            self._subscriptions = []
+        self._subscriptions.append(subscription)
 
-    def notify(self):
+
+    def notify(self) -> None:
         """Notifies the observers of a change in state"""
-        for observer in self._observers:
-            observer.update(subject=self)
+        try:
+            subscriptions = self._subscriptions
+        except AttributeError:
+            self._subscriptions = []
+        subscriptions = self._subscriptions
+        for subscription in subscriptions:
+            subscription.method()

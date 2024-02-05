@@ -2,6 +2,7 @@
 Query and edit decks
 """
 from dataclasses import asdict, dataclass, fields
+from typing import Optional
 
 from omakase.annotations import (
     DeckName,
@@ -9,13 +10,14 @@ from omakase.annotations import (
     NoteFieldValue,
     OmDeckFilterCode,
 )
+from omakase.observer_logic import Observable
 
 
 # ===============
 # SRS-independent
 # ===============
 @dataclass
-class Card:
+class Card(Observable):
     card_id: int
     note_id: int
     sort_field_value: str
