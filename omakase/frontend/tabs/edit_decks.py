@@ -191,6 +191,8 @@ class _DataMediator(Observer):
 
         Handle the special cases where no deck name is stored in memory, or if that
         deck doesn't exist anymore.
+
+        Always trigger a change in the deeck names to ensure consistent behaviour.
         """
         deck_list = self._deck_names_obl.data
         deck_name_dp = self._last_selected_deck_obl.data
@@ -199,6 +201,8 @@ class _DataMediator(Observer):
                 deck_name_dp.value = deck_list[0]
             else:
                 deck_name_dp.value = None
+        else:  # always trigger a change in deck_name
+            deck_name_dp.value = deck_name_dp.value
 
 
 def _get_cards(
@@ -249,6 +253,10 @@ class EditDeckTabContent(TabContent):
             last_selected_deck_obl=self._last_selected_deck_obl,
             deck_ui_filter_corr_obl=self._deck_ui_filter_corr_obl,
         )
+        self._resync_button = _ResyncButton(
+            deck_names_obl=self._deck_names_obl,
+            deck_manipulator=self._deck_manipulator,
+        )
         # Mediator (responsible for adjusting observables wrt each others and for
         # handling their notifications)
         self._mediator_obr = _DataMediator(
@@ -290,7 +298,9 @@ class EditDeckTabContent(TabContent):
     def _display_all_if_deck_exists(self):
         self._deck_selector_obr.display()
         self._deck_displayer_obr.display()
-        self._filter_selector_obr.display()
+        with ui.row():
+            self._filter_selector_obr.display()
+            self._resync_button.display()
 
     def __display_all_if_deck_exists(self):
         """Display when logged in and a deck exists"""
@@ -547,9 +557,25 @@ class _FilterSelector(Observer):
         self.display.refresh()
 
 
-class ResyncButton:
-    def __init__(self):
-        pass
+class _ResyncButton:
+    def __init__(
+        self,
+        deck_names_obl: DeckNamesObl,
+        deck_manipulator: DecksManipulator,
+    ):
+        self._deck_names_obl = deck_names_obl
+        self._deck_manipulator = deck_manipulator
+
+    @ui.refreshable
+    def display(self) -> None:
+        """Display the sync button, which refreshes the UI as a whole"""
+        ui.button(
+            text="Pull collection again", on_click=self._actions_on_sync_button_click
+        )
+
+    def _actions_on_sync_button_click(self):
+        # Update list of decks. The rest should update in cascade.
+        self._deck_names_obl.data = self._deck_manipulator.list_decks()
 
 
 class _FieldEditor:
