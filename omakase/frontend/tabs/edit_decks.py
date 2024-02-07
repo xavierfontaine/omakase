@@ -88,27 +88,21 @@ PromptSettings = Mock()
 # Side objects
 # ============
 # Definiting observables by name for clarity
-class DeckNamesObl(ObservableList):
+class DeckNamesObl(ObservableList[str]):
     pass
 
 
-class CurrentCardsObl(ObservableList):
+class CurrentCardsObl(ObservableList[Card]):
     pass
 
 
-class CurrentCardIdxObl(ObservablePrimitive):
+class CurrentCardIdxObl(ObservablePrimitive[int]):
     pass
 
 
 # ============
 # DataMediator
 # ============
-# Handle chain reaction across observables (ie, change data when other data change)
-# TODO:
-# Garder le mécanisme de souscription actuel, de sorte que les éléments d'UI sont
-# updatés quand les bonnes données sont updatées
-# Rajouter un mécanisme de souscription, qui est celui de DataMediator. Quand l'état
-# d'une  donnée changée, ça change l'état des autres données.
 class _DataMediator(Observer):
     def __init__(
         self,
@@ -170,7 +164,7 @@ class _DataMediator(Observer):
 
     def _handle_current_cards_change(self) -> None:
         # Update next layers
-        self._current_card_idx_obl.data = None
+        self._current_card_idx_obl.value = None
 
     def _handle_current_card_idx_change(self) -> None:
         # Update next layers
@@ -184,7 +178,7 @@ class _DataMediator(Observer):
             deck_filter_corr_obl=self._deck_ui_filter_corr_obl,
             deck_manipulator=self._deck_manipulator,
         )
-        self._current_cards_obl.data = cards
+        self._current_cards_obl.value = cards
 
     def _sanitize_current_deck_name(self):
         """Sanitize current deck
@@ -194,7 +188,7 @@ class _DataMediator(Observer):
 
         Always trigger a change in the deeck names to ensure consistent behaviour.
         """
-        deck_list = self._deck_names_obl.data
+        deck_list = self._deck_names_obl.value
         deck_name_dp = self._last_selected_deck_obl.data
         if (deck_name_dp.value is None) | (deck_name_dp.value not in deck_list):
             if len(deck_list) > 0:
@@ -210,6 +204,7 @@ def _get_cards(
     deck_filter_corr_obl: DeckFilterCorrObl,
     deck_manipulator: DecksManipulator,
 ) -> list[Card]:
+    """Get cards from a deck, given the specified filter."""
     filter_name = deck_filter_corr_obl.get_filter_dp(deck_name=deck_name).value
     om_filter_code = filter_label_obj_corr[filter_name].code
     cards = deck_manipulator.get_cards_from_deck(
@@ -340,7 +335,7 @@ class EditDeckTabContent(TabContent):
     def _get_card(self, card_index: int) -> Card:
         """Get card, throw an error if not present"""
         try:
-            card = self._current_cards_obl.data[card_index]
+            card = self._current_cards_obl.value[card_index]
         # ... we throw an exception
         except IndexError:
             logger.exception(
@@ -451,7 +446,7 @@ class _DeckSelector(Observer):
         """
         # Display
         ui.select(
-            options=self._deck_names_obl.data,
+            options=self._deck_names_obl.value,
         ).bind_value(
             target_object=self._last_selected_deck_obl.data,
             target_name="value",
@@ -508,14 +503,14 @@ class _DeckDisplayer(Observer):
 
     def _actions_on_agrid_cell_click(self, selected_card_index: int) -> None:
         """Display card editor, prepare generator conf dialog box for display"""
-        self._curr_card_idx_obl.data = selected_card_index
+        self._curr_card_idx_obl.value = selected_card_index
 
     def _get_agrid_rows_from_cards(self) -> list[dict]:
         """Transfom self._cards_obl.cards to agrid rows
 
         The result can be passed to .option["rowData"] to update the aggrid table
         """
-        return [card.get_card_properties() for card in self._cards_obl.data]
+        return [card.get_card_properties() for card in self._cards_obl.value]
 
     def _build_aggrid_mock(self):
         """Build a mock aggrid table for the first run of the interface. The deck button
@@ -575,7 +570,7 @@ class _ResyncButton:
 
     def _actions_on_sync_button_click(self):
         # Update list of decks. The rest should update in cascade.
-        self._deck_names_obl.data = self._deck_manipulator.list_decks()
+        self._deck_names_obl.value = self._deck_manipulator.list_decks()
 
 
 class _FieldEditor:

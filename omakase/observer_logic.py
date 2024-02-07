@@ -1,19 +1,38 @@
 """
 Abstract classes for the observer pattern
+
+Developer note
+--------------
+Some Observable subclasses below rely on both beartype and TypeVar. Unfortunately,
+beartype does not fully support TypeVar as of now. For that reason,
+```
+class MyObl(ObservablePrimitive[int]):
+    pass
+
+my_obl = MyObl(data="oops")
+```
+will not raise a beartype roar.
 """
 from abc import ABC, abstractmethod
-from typing import Optional, Union
+from typing import Generic, Optional, TypeVar
 
 from beartype import beartype
 from nicegui.observables import ObservableDict as NgObservableDict
 from nicegui.observables import ObservableList as NgObservableList
 
+# =======
+# TypeVar
+# =======
+# Key, value, and 'primitive' types
+K = TypeVar("K")
+V = TypeVar("V")
+P = TypeVar("P", str, int, float, bool, None)
+
+
 # ============================
 # Observer pattern - observers
 # ============================
 # TODO: generic tests
-
-
 class Observer(ABC):
     """An observer class
 
@@ -32,7 +51,7 @@ class Observer(ABC):
 class Observable:
     """Observable
 
-    In the current library, `notify` is assumed to be called from within the self.
+    In this library, `notify` is assumed to be called from within the self.
     """
 
     def attach(self, observer: Observer) -> None:
@@ -55,10 +74,10 @@ class Observable:
 
 
 @beartype
-class ObservableList(Observable):
+class ObservableList(Observable, Generic[V]):
     """Store a list-like object with notification including changes from nested elements
 
-    Use `self.data` to access that object.
+    Use `self.value` to access that object.
 
     Caution: propagation of notification
     - works for changes performed on nested list, dict, set through the usual
@@ -67,25 +86,25 @@ class ObservableList(Observable):
       that element.
     """
 
-    def __init__(self, data: Optional[list] = None) -> None:
-        data = data if data is not None else list()
-        self._data = NgObservableList(data=data, on_change=self.notify)
+    def __init__(self, data: Optional[list[V]] = None) -> None:
+        value = data if data is not None else list()
+        self._value = NgObservableList(data=value, on_change=self.notify)
 
     @property
-    def data(self) -> NgObservableList:
-        return self._data
+    def value(self) -> NgObservableList[V]:
+        return self._value
 
-    @data.setter
-    def data(self, value: list) -> None:
-        self._data = NgObservableList(data=value, on_change=self.notify)
+    @value.setter
+    def value(self, value: list[V]) -> None:
+        self._value = NgObservableList(data=value, on_change=self.notify)
         self.notify()
 
 
 @beartype
-class ObservableDict(Observable):
+class ObservableDict(Observable, Generic[K, V]):
     """Store a dict-like object with notification including changes from nested elements
 
-    Use `self.data` to access that object.
+    Use `self.value` to access that object.
 
     Caution: propagation of notification
     - works for changes performed on nested list, dict, set through the usual
@@ -94,38 +113,48 @@ class ObservableDict(Observable):
       that element.
     """
 
-    def __init__(self, data: Optional[dict] = None) -> None:
-        data = data if data is not None else dict()
-        self._data = NgObservableDict(data=data, on_change=self.notify)
+    def __init__(self, value: Optional[dict[K, V]] = None) -> None:
+        value = value if value is not None else dict()
+        self._value = NgObservableDict(data=value, on_change=self.notify)
 
     @property
-    def data(self) -> NgObservableDict:
-        return self._data
+    def value(self) -> NgObservableDict[K, V]:
+        return self._value
 
-    @data.setter
-    def data(self, value: dict) -> None:
-        self._data = NgObservableDict(data=value, on_change=self.notify)
+    @value.setter
+    def value(self, value: dict[K, V]) -> None:
+        self._value = NgObservableDict(data=value, on_change=self.notify)
         self.notify()
 
 
-_PRIMITIVE_TYPES = Union[str, int, float, bool, None]
-
-
 @beartype
-class ObservablePrimitive(Observable):
+class ObservablePrimitive(Observable, Generic[P]):
     """Store a primitive object
 
-    Use `self.data` to access that object. `self.notify` is triggered upon assignment.
+    Use `self.value` to access that object. `self.notify` is triggered upon assignment.
     """
 
-    def __init__(self, data: _PRIMITIVE_TYPES) -> None:
-        self._data = data
+    def __init__(self, data: P) -> None:
+        self._value = data
 
     @property
-    def data(self) -> _PRIMITIVE_TYPES:
-        return self._data
+    def value(self) -> P:
+        return self._value
 
-    @data.setter
-    def data(self, value: _PRIMITIVE_TYPES) -> None:
-        self._data = value
+    @value.setter
+    def value(self, value: P) -> None:
+        self._value = value
+        self.notify()
+
+
+class ObservableDataclass(Observable):
+    """NOTE: the subclass should be decorated with `@dataclass`
+
+    Values are accessed as usual for a dataclass"""
+
+    def __post_init__(self) -> None:
+        self.__dict__ = NgObservableDict(data=self.__dict__, on_change=self.notify)
+
+    def __setattr__(self, name, value) -> None:
+        super().__setattr__(name, value)
         self.notify()

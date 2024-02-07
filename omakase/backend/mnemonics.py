@@ -16,7 +16,6 @@ from omakase.backend.om_user import (
     CachedUserDataPoint,
     point_to_om_user_subcache,
 )
-from omakase.observer_logic import Observable
 
 
 class PromptFieldTypeError(Exception):
@@ -150,7 +149,7 @@ class MnemConf:
     prompt_param_field_ui_descr: dict[PromptParamName, PromptParamFieldUiConf]
 
 
-class MnemonicNoteFieldMapData(Observable):
+class MnemonicNoteFieldMapData:
     def __init__(
         self,
         prompt_params_class: Type[PromptParams],
