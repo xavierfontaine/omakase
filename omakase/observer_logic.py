@@ -71,6 +71,7 @@ class Observable:
         observers = self._observers
         for observer in observers:
             observer.update(self)
+        # print(self.__class__.__qualname__)
 
 
 @beartype

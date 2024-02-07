@@ -45,9 +45,9 @@ from nicegui import ui
 
 from omakase.annotations import DeckName, MnemonicUiLabel, NoteFieldName, NoteType
 from omakase.backend.decks import (
-    Card,
     DeckFilters,
     DecksManipulator,
+    ObservableCard,
     filter_label_obj_corr,
     get_card_property_names,
 )
@@ -60,14 +60,15 @@ from omakase.backend.mnemonics import (
 )
 from omakase.backend.om_user import DeckFilterCorrObl, LastSelectedDeckObl
 from omakase.exceptions import display_exception
+from omakase.frontend.tabs.edit_decks.cardlevel import CardEditor
+from omakase.frontend.tabs.edit_decks.data import (
+    CurrentCardIdxObl,
+    CurrentCardsObl,
+    DeckNamesObl,
+)
 from omakase.frontend.tabs.utils import TabContent
 from omakase.frontend.web_user import OM_USERNAME_KEY, point_to_web_user_data
-from omakase.observer_logic import (
-    Observable,
-    ObservableList,
-    ObservablePrimitive,
-    Observer,
-)
+from omakase.observer_logic import Observable, Observer
 from omakase.om_logging import logger
 
 # =========
@@ -85,22 +86,6 @@ PromptSettings = Mock()
 
 
 # ============
-# Side objects
-# ============
-# Definiting observables by name for clarity
-class DeckNamesObl(ObservableList[str]):
-    pass
-
-
-class CurrentCardsObl(ObservableList[Card]):
-    pass
-
-
-class CurrentCardIdxObl(ObservablePrimitive[int]):
-    pass
-
-
-# ============
 # DataMediator
 # ============
 class _DataMediator(Observer):
@@ -110,8 +95,8 @@ class _DataMediator(Observer):
         deck_names_obl: DeckNamesObl,
         last_selected_deck_obl: LastSelectedDeckObl,
         deck_ui_filter_corr_obl: DeckFilterCorrObl,
-        current_cards_obl: ObservableList,
-        current_card_idx_obl: ObservablePrimitive,
+        current_cards_obl: CurrentCardsObl,
+        current_card_idx_obl: CurrentCardIdxObl,
     ) -> None:
         """Change data upon notification of change in other data
 
@@ -203,7 +188,7 @@ def _get_cards(
     deck_name: DeckName,
     deck_filter_corr_obl: DeckFilterCorrObl,
     deck_manipulator: DecksManipulator,
-) -> list[Card]:
+) -> list[ObservableCard]:
     """Get cards from a deck, given the specified filter."""
     filter_name = deck_filter_corr_obl.get_filter_dp(deck_name=deck_name).value
     om_filter_code = filter_label_obj_corr[filter_name].code
@@ -252,6 +237,11 @@ class EditDeckTabContent(TabContent):
             deck_names_obl=self._deck_names_obl,
             deck_manipulator=self._deck_manipulator,
         )
+        self._card_editor_obr = _CardEditorWrapper(
+            current_cards_obl=self._current_cards_obl,
+            current_card_idx_obl=self._current_card_idx_obl,
+            deck_manipulator=self._deck_manipulator,
+        )
         # Mediator (responsible for adjusting observables wrt each others and for
         # handling their notifications)
         self._mediator_obr = _DataMediator(
@@ -272,6 +262,7 @@ class EditDeckTabContent(TabContent):
         self._current_cards_obl.attach(self._mediator_obr)
         self._current_cards_obl.attach(self._deck_displayer_obr)
         self._current_card_idx_obl.attach(self._mediator_obr)
+        self._current_card_idx_obl.attach(self._card_editor_obr)
         # [Slight unsafe] To align all data and UI elements, we trigger a chain reaction
         self._last_selected_deck_obl.notify()
 
@@ -296,6 +287,7 @@ class EditDeckTabContent(TabContent):
         with ui.row():
             self._filter_selector_obr.display()
             self._resync_button.display()
+        self._card_editor_obr.display()
 
     def __display_all_if_deck_exists(self):
         """Display when logged in and a deck exists"""
@@ -332,19 +324,6 @@ class EditDeckTabContent(TabContent):
             return None
         return deck_name_dp.value  # noqa: F821
 
-    def _get_card(self, card_index: int) -> Card:
-        """Get card, throw an error if not present"""
-        try:
-            card = self._current_cards_obl.value[card_index]
-        # ... we throw an exception
-        except IndexError:
-            logger.exception(
-                f"User {self.om_username} pointed to a card that is not"
-                " present. WTF."
-            )
-            display_exception()
-        return card
-
     def __actions_on_deck_selection(self, deck_name: str) -> None:
         """Update the displayed deck and the selected filter"""
         deck_name = self._get_current_deck_name()
@@ -368,7 +347,7 @@ class EditDeckTabContent(TabContent):
             return
         else:
             card = self._get_card(card_index=selected_card_index)
-            field_editor = _FieldEditor(
+            field_editor = _FieldEditor(  # noqa: F821
                 card=card,
                 whole_tab=self,
             )
@@ -573,13 +552,13 @@ class _ResyncButton:
         self._deck_names_obl.value = self._deck_manipulator.list_decks()
 
 
-class _FieldEditor:
+class __FieldEditor:
     """Display the field edition system (incl mnemonic generation)"""
 
     # TODO: put outside the choice of the mnemonic type, and reinstantiate all objects
     # when the mnemonic type is changed.
 
-    def __init__(self, card: Card, whole_tab: EditDeckTabContent):
+    def __init__(self, card: ObservableCard, whole_tab: EditDeckTabContent):
         # Assignments to self
         self._card = card
         self._whole_tab = whole_tab
@@ -742,7 +721,7 @@ class _FieldEditor:
         pass
 
     @ui.refreshable
-    def _display_individual_field_editors(self, card: Card) -> None:
+    def _display_individual_field_editors(self, card: ObservableCard) -> None:
         """Display the card editor given a card"""
         note_fields = card.note_fields
         for field_name, field_content in note_fields.items():
@@ -758,6 +737,46 @@ class _FieldEditor:
                 note_fields=note_fields,
             ),
         )
+
+
+class _CardEditorWrapper(Observer):
+    def __init__(
+        self,
+        current_cards_obl: CurrentCardsObl,
+        current_card_idx_obl: CurrentCardsObl,
+        deck_manipulator: DecksManipulator,
+    ) -> None:
+        # TODO: docstr
+        self._current_cards_obl = current_cards_obl
+        self._current_card_idx_obl = current_card_idx_obl
+        self._deck_manipulator = deck_manipulator
+
+    @ui.refreshable
+    def display(self) -> None:
+        # Display nothing if no card index
+        if self._current_card_idx_obl.value is None:
+            return
+        # TODO: prendre la carte, et générer le CardEditor
+        card = self._get_card()
+        # The card_editor UI lives only here
+        card_editor = CardEditor(card=card, deck_manipulator=self._deck_manipulator)
+        card_editor.display()
+
+    def update(self, observable: Observable) -> None:
+        self.display.refresh()
+
+    def _get_card(self) -> ObservableCard:
+        """Get card, throw an error if not present"""
+        try:
+            card = self._current_cards_obl.value[self._current_card_idx_obl.value]
+        # ... we throw an exception
+        except IndexError:
+            logger.exception(
+                f"User {self.om_username} pointed to a card that is not"
+                " present. WTF."
+            )
+            display_exception()
+        return card
 
 
 class GenerationInterface:

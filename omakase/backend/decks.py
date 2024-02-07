@@ -40,7 +40,7 @@ from omakase.observer_logic import ObservableDataclass
 
 
 @dataclass
-class Card(ObservableDataclass):
+class ObservableCard(ObservableDataclass):
     card_id: int
     note_id: int
     sort_field_value: str
@@ -115,7 +115,7 @@ class Card(ObservableDataclass):
 
 def get_card_property_names() -> list:
     """Return the property names (excl the card's fields)"""
-    names = [field.name for field in fields(Card)]
+    names = [field.name for field in fields(ObservableCard)]
     names.pop(names.index("note_fields"))
     return names
 
@@ -166,7 +166,7 @@ class DecksManipulator:
 
     def get_cards_from_deck(
         self, deck_name: DeckName, om_filter_code: OmDeckFilterCode
-    ) -> list[Card]:
+    ) -> list[ObservableCard]:
         # TODO: implement card retrieval
         # TODO: implement filter system (from the *om* filter, select the cards with the
         # right *anki* filters)
@@ -174,7 +174,7 @@ class DecksManipulator:
         # BEGIN MOCK
         if deck_name == "deck1":
             cards = [
-                Card(
+                ObservableCard(
                     card_id=0,
                     note_id=0,
                     sort_field_value="card1",
@@ -183,7 +183,7 @@ class DecksManipulator:
                     note_type="note type 1",
                     note_fields={"c1f1": "c1fv1", "c1f2": "c1f2v2"},
                 ),
-                Card(
+                ObservableCard(
                     card_id=2,
                     note_id=1,
                     sort_field_value="card2",
