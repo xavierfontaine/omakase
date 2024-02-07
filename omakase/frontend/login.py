@@ -4,7 +4,6 @@ Login system
 from nicegui import ui
 
 from omakase.backend.auth import check_password
-from omakase.backend.om_user import init_missing_om_user_cache
 from omakase.frontend.routing import ENTRY_ROUTES
 from omakase.frontend.web_user import (
     AUTH_STATUS_KEY,
@@ -82,5 +81,4 @@ class Logger:
         self.web_user_data.update({OM_USERNAME_KEY: username, AUTH_STATUS_KEY: True})
         # ui.notify("Login successful!")
         self._dialog.close()
-        init_missing_om_user_cache(om_username=username)
         ui.open(ENTRY_ROUTES)
