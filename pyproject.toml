@@ -4,10 +4,6 @@ version = "0.1.0"
 description = ""
 authors = ["Xavier Fontaine <xavier.fontainec@gmail.com>"]
 readme = "README.md"
-packages = [
-  { include  = "omakase" },
-  { include  = "ankiapi" },
-]
 
 [tool.poetry.dependencies]
 python = "^3.11"
