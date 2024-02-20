@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, fields
 from typing import Annotated, Literal, Optional, Type, Union, get_args, get_origin
@@ -16,12 +17,236 @@ from omakase.backend.om_user import (
     CachedUserDataPoint,
     point_to_om_user_subcache,
 )
+from omakase.observer_logic import Observable
 
 
 class PromptFieldTypeError(Exception):
     """A prompt field has an unexpected type"""
 
     pass
+
+
+# ===============
+# General classes
+# ===============
+"""
+Developer note:
+* PromptField, PromptRow, PromptSection, PromptFieldData form a matryoshka.
+* Instantiation a PromptFieldData will instantiate all the inner dolls. The
+PromptFieldData `notify` is shared to the inner dolls.
+"""
+
+# TODO: further explanation of the methodin the docstr
+
+
+class PromptField(ABC, Observable):
+    """Field of a prompt"""
+
+    _DEFAULT_VALUE = ""
+
+    def __init__(self):
+        self.value: str = self._DEFAULT_VALUE
+
+    @property
+    @abstractmethod
+    def prompt_name(self) -> str:
+        """Name as it should appear in the prompt"""
+        pass
+
+    @property
+    @abstractmethod
+    def ui_placeholder(self) -> str:
+        """Placeholder in the ui when no value is filled in"""
+        pass
+
+    @property
+    @abstractmethod
+    def ui_explanation(self) -> str:
+        """Explanation of the field, as should appear in the help page of the ui"""
+        pass
+
+
+class PromptRow(ABC, Observable):
+    """Row of fields for a prompt
+
+    The notion of a 'row of fields' designates fields that might be:
+    - Connected (when one is filled, the other can be pre-filled based on
+      existing associations.)
+    - Repeated (a section of prompt is defined as a row repeated 1+ times)
+    """
+
+    def __init__(self):
+        # Init all fields
+        self.value: list[PromptField] = [cl() for cl in self.field_classes]
+        # Propagate the notify method
+        for field in self.value:
+            field.notify = self.notify
+
+    @property
+    @abstractmethod
+    def field_classes(self) -> list[Type[PromptField]]:
+        """Classes of fields in the row"""
+        pass
+
+    def update_from_store(
+        self, field_pos: int, field_value: str, om_username: str
+    ) -> None:
+        """Get back existing associations of fields for this value of field
+        `field_pos`"""
+        assoc_store = FieldRowAssocs(
+            om_username=om_username, row_class_name=self.__class__.__name__
+        )
+        assoc = assoc_store.retrieve(field_pos=field_pos, field_value=field_value)
+        self.value = assoc
+
+    def store_assoc(self, om_username: str):
+        """Store the current field association"""
+        assoc_store = FieldRowAssocs(
+            om_username=om_username, row_class_name=self.__class__.__name__
+        )
+        assoc_store.store(field_values=self.value)
+
+
+class PromptSection(ABC, Observable):
+    """A section of fields of a prompt
+
+    Concretely, a PromptRow repeated 1+ times"""
+
+    def __init__(self) -> None:
+        # Init the value
+        self.value: list[PromptRow] = [self.field_row_class()] * self.n_repeat
+        # Propagate the notify method
+        for row in self.value:
+            row.notify = self.notify
+
+    @property
+    @abstractmethod
+    def field_row_class(self) -> Type[PromptRow]:
+        """Classes of the field row composing the section."""
+        pass
+
+    @property
+    @abstractmethod
+    def n_repeat(self) -> int:
+        """Number of repetitions of the row."""
+        pass
+
+    @property
+    @abstractmethod
+    def ui_name(self) -> int:
+        """Name as displayed in the UI"""
+        pass
+
+    @property
+    @abstractmethod
+    def _section_explanation_header(self) -> str:
+        """Explanation of the section, as should appear in the help page of the ui
+
+        `self.full_ui_explanation` will automatically happen it before teh description
+        of the individual fields"""
+        pass
+
+    def full_ui_explanation(self) -> str:
+        """Full explanation of the section parameters"""
+        full_expl = ""
+        # Add name
+        full_expl += f"## {self.ui_name}"
+        # Add the header of section expl
+        full_expl += f"\n{self._section_explanation_header}"
+        # Add field explanations
+        full_expl += "\n"
+        typical_row = self.value[0]
+        for field in typical_row.value:
+            field_expl = field.ui_explanation
+            full_expl += f"\n* {field_expl}"
+        return full_expl
+
+
+class PromptFieldData(ABC, Observable):
+    """Encapsulate all the field data of a prompt
+
+    Concretely, a sequence of PromptSection.
+    """
+
+    def __init__(self) -> None:
+        # Init the value
+        self.value: list[PromptSection] = [cl() for cl in self.field_section_classes]
+        # Propagate the notify method
+        for section in self.value:
+            section.notify = self.notify
+
+    @property
+    @abstractmethod
+    def field_section_classes(self) -> list[Type[PromptSection]]:
+        """Classes of the field sections composing the prompt."""
+        pass
+
+    @property
+    @abstractmethod
+    def _ui_name(self) -> str:
+        """UI name for the mnemonic"""
+        pass
+
+    @property
+    @abstractmethod
+    def _mnem_explanation_header(self):
+        """General description of the prompt fields
+
+        `self.generate_help` will automatically happen that to the description of the
+        sections"""
+        pass
+
+    def full_mnem_explanation(self) -> str:
+        """Full explanation of the prompt parameters"""
+        full_expl = ""
+        # Add name
+        full_expl += f"# {self.ui_name}"
+        # Add the header of section expl
+        full_expl += f"\n{self._mnem_explanation_header}"
+        # Add section expalantions
+        for section in self.value:
+            full_expl += f"\n{section.full_ui_explanation()}"
+        return full_expl
+
+
+# ==============
+# Database utils
+# ==============
+# TODO: put that in a separate module
+class FieldRowAssocs:
+    """Store and retrieve associations between fields of a prompt row"""
+
+    def __init__(self, om_username: str, row_class_name: str) -> None:
+        self._om_username = om_username
+        self._row_class_name = row_class_name
+
+    def retrieve(self, field_pos: int, field_value: str) -> list[str]:
+        """For this `field_value` of field `field_pos`, return the row association of
+        values."""
+        # TODO: implement
+        # BEGIN MOCK
+        print(
+            f"Pretending to retrieve for {self._om_username=}, {self._row_class_name},"
+            f" {field_pos=} and {field_value=}"
+        )
+        inst: PromptRow = getattr(globals(), self._row_class_name)()
+        row_len = len(inst.value)
+        if field_pos == 0 & field_value == "a":
+            field_values = ["a"] * row_len
+        elif field_pos == 1 & field_value == "b":
+            field_values = ["b"] * row_len
+        # END MOCK
+        return field_values
+
+    def store(self, field_values: list[str]) -> None:
+        """Store the current association"""
+        # TODO: implement
+        # BEGIN MOCK
+        print(
+            f"Pretending to store for {self._om_username=} and {self._row_class_name},"
+            f" the association {field_values=}"
+        )
+        # END MOCK
 
 
 # ===============

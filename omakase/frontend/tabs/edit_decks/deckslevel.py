@@ -1,16 +1,5 @@
-# TODO All observables need to notify upon change in data.
-# TODO To simplify the process down the road, I can create meta-observables
-# for different types of data (Dict, List, Point.) For dict and list, I can
-# rely on the abstract types of nicegui.
-# TODO But at any rate, stop abstracting... It's been weeks already. I can write a note
-# on my decision.
-
-# Observables must use notify.
-# Upon extension of the code, I might have to rely to the architecture proposed by
-# nicegui for recursive notifications, but that would require some work.
 # TODO: remove useless references
 # Mid run
-# TODO: arguments of data mediator should only be observables.
 # TODO: change logic to get cards instead of notes (so that I can modify card
 # attributes, for instance, although most editing will be on note fields.)
 # TODO: when stabilized, add docstrings
