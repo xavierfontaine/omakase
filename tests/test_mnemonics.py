@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from omakase.backend.mnemonics import PromptFieldTypeError, PromptParams
+from omakase.backend.mnemonics.base import PromptFieldTypeError, PromptParams
 
 
 @dataclass

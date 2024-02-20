@@ -40,7 +40,7 @@ from omakase.backend.decks import (
     filter_label_obj_corr,
     get_card_property_names,
 )
-from omakase.backend.mnemonics import (
+from omakase.backend.mnemonics.base import (
     MnemConf,
     MnemonicNoteFieldMapData,
     get_str_field_names,

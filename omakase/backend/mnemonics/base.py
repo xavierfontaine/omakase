@@ -3,6 +3,8 @@ from copy import deepcopy
 from dataclasses import dataclass, fields
 from typing import Annotated, Literal, Optional, Type, Union, get_args, get_origin
 
+from beartype import beartype
+
 from omakase.annotations import (
     ComponentConcept,
     NoteFieldName,
@@ -36,7 +38,7 @@ Developer note:
 PromptFieldData `notify` is shared to the inner dolls.
 """
 
-# TODO: further explanation of the methodin the docstr
+# TODO: further explanation of the method in the docstr ↓
 
 
 class PromptField(ABC, Observable):
@@ -55,14 +57,20 @@ class PromptField(ABC, Observable):
 
     @property
     @abstractmethod
-    def ui_placeholder(self) -> str:
-        """Placeholder in the ui when no value is filled in"""
+    def ui_name(self) -> str:
+        """Name as it should appear in the UI"""
         pass
 
     @property
     @abstractmethod
     def ui_explanation(self) -> str:
         """Explanation of the field, as should appear in the help page of the ui"""
+        pass
+
+    @property
+    @abstractmethod
+    def ui_placeholder(self) -> str:
+        """Placeholder in the ui when no value is filled in"""
         pass
 
 
@@ -114,7 +122,9 @@ class PromptSection(ABC, Observable):
 
     def __init__(self) -> None:
         # Init the value
-        self.value: list[PromptRow] = [self.field_row_class()] * self.n_repeat
+        self.value: list[PromptRow] = [
+            self.field_row_class() for _ in range(self.n_repeat)
+        ]
         # Propagate the notify method
         for row in self.value:
             row.notify = self.notify
@@ -139,6 +149,12 @@ class PromptSection(ABC, Observable):
 
     @property
     @abstractmethod
+    def prompt_name(self) -> int:
+        """Name as it should appear in the prompt"""
+        pass
+
+    @property
+    @abstractmethod
     def _section_explanation_header(self) -> str:
         """Explanation of the section, as should appear in the help page of the ui
 
@@ -146,11 +162,12 @@ class PromptSection(ABC, Observable):
         of the individual fields"""
         pass
 
+    @property
     def full_ui_explanation(self) -> str:
         """Full explanation of the section parameters"""
         full_expl = ""
         # Add name
-        full_expl += f"## {self.ui_name}"
+        full_expl += f"#### {self.ui_name}"
         # Add the header of section expl
         full_expl += f"\n{self._section_explanation_header}"
         # Add field explanations
@@ -158,11 +175,12 @@ class PromptSection(ABC, Observable):
         typical_row = self.value[0]
         for field in typical_row.value:
             field_expl = field.ui_explanation
-            full_expl += f"\n* {field_expl}"
+            field_name = field.ui_name
+            full_expl += f"\n* `{field_name}`: {field_expl}"
         return full_expl
 
 
-class PromptFieldData(ABC, Observable):
+class PromptFieldsData(ABC, Observable):
     """Encapsulate all the field data of a prompt
 
     Concretely, a sequence of PromptSection.
@@ -183,8 +201,8 @@ class PromptFieldData(ABC, Observable):
 
     @property
     @abstractmethod
-    def _ui_name(self) -> str:
-        """UI name for the mnemonic"""
+    def ui_name(self) -> str:
+        """UI name for the prompt type"""
         pass
 
     @property
@@ -196,16 +214,17 @@ class PromptFieldData(ABC, Observable):
         sections"""
         pass
 
+    @property
     def full_mnem_explanation(self) -> str:
         """Full explanation of the prompt parameters"""
         full_expl = ""
         # Add name
-        full_expl += f"# {self.ui_name}"
+        full_expl += f"### {self.ui_name}"
         # Add the header of section expl
         full_expl += f"\n{self._mnem_explanation_header}"
         # Add section expalantions
         for section in self.value:
-            full_expl += f"\n{section.full_ui_explanation()}"
+            full_expl += f"\n{section.full_ui_explanation}"
         return full_expl
 
 
