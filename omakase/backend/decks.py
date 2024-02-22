@@ -1,6 +1,7 @@
 """
 Query and edit decks
 """
+
 from dataclasses import asdict, dataclass, fields
 
 from omakase.annotations import (
@@ -11,34 +12,10 @@ from omakase.annotations import (
 )
 from omakase.observer_logic import ObservableDataclass
 
+
 # ===============
 # SRS-independent
 # ===============
-
-# @dataclass
-# class Card(Observable):
-#     card_id: int
-#     note_id: int
-#     sort_field_value: str
-#     due_value: int
-#     note_type: str
-#     study_status: OmDeckFilterCode
-#     note_fields: dict[NoteFieldName, NoteFieldValue]
-#
-#     def __post_init__(self) -> None:
-#         self.__dict__ = NgObservableDict(data=self.__dict__, on_change=self.notify)
-#
-#     def __setattr__(self, name, value) -> None:
-#         super().__setattr__(name, value)
-#         self.notify()
-#
-#     def get_card_properties(self) -> dict:
-#         """Return the card properties (excl the card's fields) as a dict"""
-#         dic = asdict(self)
-#         dic.pop("note_fields")
-#         return dic
-
-
 @dataclass
 class ObservableCard(ObservableDataclass):
     card_id: int
@@ -56,86 +33,11 @@ class ObservableCard(ObservableDataclass):
         return dic
 
 
-# @dataclass
-# class CardObservable(Observable):
-#     card_id: int
-#     note_id: int
-#     sort_field_value: str
-#     due_value: int
-#     note_type: str
-#     study_status: OmDeckFilterCode
-#     note_fields: dict[NoteFieldName, NoteFieldValue]
-#
-#     def get_card_properties(self) -> dict:
-#         """Return the card properties (excl the card's fields) as a dict"""
-#         dic = asdict(self)
-#         dic.pop("note_fields")
-#         return dic
-
-
-# class ObservableCard(Observable):
-#     def __init__(
-#         self,
-#         card_id: int,
-#         note_id: int,
-#         sort_field_value: str,
-#         due_value: int,
-#         note_type: str,
-#         study_status: OmDeckFilterCode,
-#         note_fields: dict[NoteFieldName, NoteFieldValue],
-#     ) -> None:
-#         # TODO: adapt to the above
-#         args = locals()
-#         args.pop("self")
-#         print(args)
-#         self._value = NgObservableDict(
-#             data=args, on_change=self.notify
-#         )
-#
-#     @property
-#     def card_id(self) -> int:
-#         key = inspect.currentframe().f_code.co_name
-#         return self._value[key]
-#
-#     @card_id.setter
-#     def card_id(self, value: int) -> None:
-#         key = inspect.currentframe().f_code.co_name
-#         self._value[key] = value
-
-
-# class ObservableCard(Card, Observable):
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#         # self.__dict__ = NgObservableDict(
-#         #     data=self.__dict__, on_change=self.notify)
-#
-#     def __setattr__(self, name, value) -> None:
-#         self.notify()
-
-
 def get_card_property_names() -> list:
     """Return the property names (excl the card's fields)"""
     names = [field.name for field in fields(ObservableCard)]
     names.pop(names.index("note_fields"))
     return names
-
-
-# class Card(Observable):
-#
-#     card_id_dp: int
-#     note_id_dp: int
-#     sort_field_value_dp: str
-#     due_value_dp: int
-#     note_type_dp: str
-#     study_status_dp: OmDeckFilterCode
-#     note_fields_dp: dict[NoteFieldName, NoteFieldValue]
-#
-#     def get_card_properties(self) -> dict:
-#         """Return the card properties (excl the card's fields) as a dict"""
-#         dic = asdict(self)
-#         dic.pop("note_fields")
-#         return dic
-#
 
 
 # ===============

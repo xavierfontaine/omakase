@@ -125,47 +125,6 @@ class CachedUserDataPoint:
             self._root_dict[self._subject_key] = self._default_value
 
 
-# # ======================
-# # Subject - abstractions
-# # ======================
-# class ObservableCachedDpPointer(Observable):
-#     """Observable pointer to a CachedUserDataPoint
-#
-#     Get the pointer through `get_dp_pointer`. Changes in the value of the
-#     CachedUserDataPoint will trigger `self.notify`
-#     """
-#     def __init__(self, om_username: str) -> None:
-#         self._om_username = om_username
-#
-#     @property
-#     @abstractmethod
-#     def _root_keys(self) -> list[str]:
-#         """As definied in CachedUserDataPoint"""
-#         pass
-#
-#     @property
-#     @abstractmethod
-#     def _subject_key(self) -> str:
-#         """As definied in CachedUserDataPoint"""
-#         pass
-#
-#     @property
-#     @abstractmethod
-#     def _default_value(self) -> Any:
-#         """As definied in CachedUserDataPoint"""
-#         pass
-#
-#     def get_dp_pointer(self, *args, **kwargs) -> CachedUserDataPoint:
-#         dp = CachedUserDataPoint(
-#             om_username=self._om_username,
-#             root_keys=self._root_keys,
-#             subject_key=self._subject_key,
-#             default_value=self._default_value,
-#             on_change=self.notify,
-#         )
-#         return dp
-
-
 # ========================
 # Subject - implementation
 # ========================
