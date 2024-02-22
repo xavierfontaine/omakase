@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, fields
-from typing import Annotated, Literal, Optional, Type, Union, get_args, get_origin
+from typing import Annotated, Any, Literal, Optional, Type, Union, get_args, get_origin
 
-from beartype import beartype
+from jinja2 import Template
 
 from omakase.annotations import (
     ComponentConcept,
@@ -19,11 +19,18 @@ from omakase.backend.om_user import (
     CachedUserDataPoint,
     point_to_om_user_subcache,
 )
+from omakase.io import get_jinja_template
 from omakase.observer_logic import Observable
 
 
 class PromptFieldTypeError(Exception):
     """A prompt field has an unexpected type"""
+
+    pass
+
+
+class EmptyFieldError(Exception):
+    """A PromptSection was left empty by the user"""
 
     pass
 
@@ -37,8 +44,12 @@ Developer note:
 * Instantiation a PromptFieldData will instantiate all the inner dolls. The
 PromptFieldData `notify` is shared to the inner dolls.
 """
+SectionPromptName = Annotated[str, "prompt_name of a PromptSection"]
+FieldPromptName = Annotated[str, "prompt_name of a PromptField"]
+FieldValue = Annotated[Any, "Value of a PromptField"]
 
 # TODO: further explanation of the method in the docstr ↓
+# TODO: test the below (at list `to_dict`)
 
 
 class PromptField(ABC, Observable):
@@ -85,9 +96,16 @@ class PromptRow(ABC, Observable):
 
     def __init__(self):
         # Init all fields
-        self.value: list[PromptField] = [cl() for cl in self.field_classes]
+        self.value: dict[FieldPromptName, PromptField] = {
+            (instance := cl()).prompt_name: instance for cl in self.field_classes
+        }
+        # Sanity: was their duplicates in keys?
+        if len(self.value) != len(self.field_classes):
+            raise ValueError(
+                "Some fields in `self.field_classes` share the same" " prompt_name"
+            )
         # Propagate the notify method
-        for field in self.value:
+        for field in self.value.values():
             field.notify = self.notify
 
     @property
@@ -173,7 +191,7 @@ class PromptSection(ABC, Observable):
         # Add field explanations
         full_expl += "\n"
         typical_row = self.value[0]
-        for field in typical_row.value:
+        for field in typical_row.value.values():
             field_expl = field.ui_explanation
             field_name = field.ui_name
             full_expl += f"\n* `{field_name}`: {field_expl}"
@@ -188,9 +206,20 @@ class PromptFieldsData(ABC, Observable):
 
     def __init__(self) -> None:
         # Init the value
-        self.value: list[PromptSection] = [cl() for cl in self.field_section_classes]
+        self.value: dict[SectionPromptName, PromptSection] = {
+            (instance := cl()).prompt_name: instance
+            for cl in self.field_section_classes
+        }
+        # Sanity: was their duplicates in keys?
+        if len(self.value) != len(self.field_section_classes):
+            raise ValueError(
+                "Some section in `self.field_section_classes` share the same"
+                " prompt_name"
+            )
+        # Load the template
+        self._template = self._load_template()
         # Propagate the notify method
-        for section in self.value:
+        for section in self.value.values():
             section.notify = self.notify
 
     @property
@@ -203,6 +232,18 @@ class PromptFieldsData(ABC, Observable):
     @abstractmethod
     def ui_name(self) -> str:
         """UI name for the prompt type"""
+        pass
+
+    @property
+    @abstractmethod
+    def template_name(self) -> str:
+        """Name of the jinja template (= folder name in '/template')"""
+        pass
+
+    @property
+    @abstractmethod
+    def template_version(self) -> int:
+        """Version of the jinja template (= number in '{number}.jinja')"""
         pass
 
     @property
@@ -223,9 +264,77 @@ class PromptFieldsData(ABC, Observable):
         # Add the header of section expl
         full_expl += f"\n{self._mnem_explanation_header}"
         # Add section expalantions
-        for section in self.value:
+        for section in self.value.values():
             full_expl += f"\n{section.full_ui_explanation}"
         return full_expl
+
+    def to_dict(
+        self,
+        drop_empty_rows: bool = True,
+        raise_when_empty_value_remains: bool = True,
+    ) -> dict[SectionPromptName, list[dict[FieldPromptName, FieldValue]]]:
+        """Transform the matryoshka of data into a dictionary
+
+        Args:
+            drop_empty_rows: drop a row if all its FieldValue are empty
+            raise_when_section_empty: raise when there are no value in a section
+        """
+        # Populate dict
+        dic = dict()
+        for section in self.value.values():
+            dic[section.prompt_name] = list()
+            for row in section.value:
+                row_dict = {}
+                for field in row.value.values():
+                    row_dict[field.prompt_name] = field.value
+                # If the row is fully empty, go to the next
+                row_is_empty = all(v == "" for v in row_dict.values())
+                row_is_partly_empty = (not row_is_empty) and any(
+                    v == "" for v in row_dict.values()
+                )
+                if row_is_empty and drop_empty_rows:
+                    continue
+                elif row_is_partly_empty and raise_when_empty_value_remains:
+                    raise EmptyFieldError(
+                        f"A field in section '{section.prompt_name}' was left empty"
+                        " while other in the same row are not."
+                    )
+                else:
+                    dic[section.prompt_name].append(row_dict)
+        return dic
+
+    def _load_template(self) -> Template:
+        """Get jinja template for the template name and version"""
+        template = get_jinja_template(
+            template_name=self.template_name, version=self.template_version
+        )
+        return template
+
+    def get_prompt(self) -> str:
+        """Fill the template with the prompt fields"""
+        prompt_args = self.to_dict(
+            drop_empty_rows=True, raise_when_empty_value_remains=True
+        )
+        prompt = self._template.render(**prompt_args)
+        return prompt
+
+    def get_1d_prompt_section_names(self) -> list[SectionPromptName]:
+        """Get name of section containing only 1 row, and that row contain
+        1 parameter only.
+        """
+        out_sect_names = []
+        # Get structure of prompt parameters as dict
+        data_dict = self.to_dict(
+            drop_empty_rows=False, raise_when_empty_value_remains=False
+        )
+        for sect_name, sect_list in data_dict.items():
+            # Only one row in section?
+            if len(sect_list) == 1:
+                # Only 1 field in row?
+                row = sect_list[0]
+                if len(row) == 1:
+                    out_sect_names.append(sect_name)
+        return out_sect_names
 
 
 # ==============
@@ -363,18 +472,18 @@ class PromptParams:
         return error_msg.format(field_name=field_name)
 
 
-def get_str_field_names(
-    prompt_params_class: Type[PromptParams],
-) -> list[PromptParamName]:
-    """Return all str fields"""
-    out_field_names = []
-    for f in fields(prompt_params_class):
-        if f.type == str:
-            out_field_names.append(f.name)
-        elif get_origin(f.type) is Annotated:
-            if get_args(f.type)[0] == str:
-                out_field_names.append(f.name)
-    return out_field_names
+# def get_prompt_str_field_names(
+#     prompt_params_class: Type[PromptParams],
+# ) -> list[PromptParamName]:
+#     """Return all str fields of the prompt"""
+#     out_field_names = []
+#     for f in fields(prompt_params_class):
+#         if f.type == str:
+#             out_field_names.append(f.name)
+#         elif get_origin(f.type) is Annotated:
+#             if get_args(f.type)[0] == str:
+#                 out_field_names.append(f.name)
+#     return out_field_names
 
 
 @dataclass
@@ -396,7 +505,7 @@ class MnemConf:
 class MnemonicNoteFieldMapData:
     def __init__(
         self,
-        prompt_params_class: Type[PromptParams],
+        prompt_params_class: Type[PromptFieldsData],
         note_type: NoteType,
         note_field_names: list[NoteFieldName],
         om_username: str,
@@ -474,9 +583,8 @@ class MnemonicNoteFieldMapData:
         note type. Check that all the prompt parameter names are accounted for --
         and only them."""
         # Get names of **string** prompt params
-        str_prompt_param_names = get_str_field_names(
-            prompt_params_class=self._prompt_params_class
-        )
+        prompt_data_instance = self._prompt_params_class()
+        str_prompt_param_names = prompt_data_instance.get_1d_prompt_section_names()
         # check for existing prompt param names that exist in user data but shouldn't
         for prompt_param in self._prompt_note_assocs.keys():
             if prompt_param not in str_prompt_param_names:

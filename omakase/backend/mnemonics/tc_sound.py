@@ -15,7 +15,7 @@ from omakase.backend.mnemonics.base import (
 # ===========
 # PromptField
 # ===========
-class ComponentConcept(PromptField):
+class _ComponentConcept(PromptField):
     @property
     def prompt_name(self) -> str:
         return "component_concept"
@@ -33,7 +33,7 @@ class ComponentConcept(PromptField):
         return "concept ('bath robe'...)"
 
 
-class ComponentConceptDetails(PromptField):
+class _ComponentConceptDetails(PromptField):
     @property
     def prompt_name(self) -> str:
         return "component_concept_details"
@@ -54,14 +54,14 @@ class ComponentConceptDetails(PromptField):
         return "details ('A fancy bath robe [..]')"
 
 
-class Sound(PromptField):
+class _Sound(PromptField):
     @property
     def prompt_name(self) -> str:
-        return "sound"
+        return "component_sound"
 
     @property
     def ui_name(self) -> str:
-        return "sound"
+        return "component sound"
 
     @property
     def ui_explanation(self) -> str:
@@ -72,7 +72,7 @@ class Sound(PromptField):
         return "Sound ('りょ')"
 
 
-class TargetConcept(PromptField):
+class _TargetConcept(PromptField):
     @property
     def prompt_name(self) -> str:
         return "target_concept"
@@ -90,7 +90,7 @@ class TargetConcept(PromptField):
         return "Target concept ('voyage')"
 
 
-class TargetMeaningMnemonic(PromptField):
+class _TargetMeaningMnemonic(PromptField):
     @property
     def prompt_name(self) -> str:
         return "target_meaning_mnemonic"
@@ -114,68 +114,41 @@ class TargetMeaningMnemonic(PromptField):
 # =========
 # PromptRow
 # =========
-class Component(PromptRow):
+class _Component(PromptRow):
     @property
     def field_classes(
         self,
     ) -> list[Type[PromptField]]:
         """Classes of fields in the row"""
-        return [Sound, ComponentConcept, ComponentConceptDetails]
+        return [_Sound, _ComponentConcept, _ComponentConceptDetails]
 
 
-class TargetConceptRow(PromptRow):
+class _TargetConceptRow(PromptRow):
     @property
     def field_classes(
         self,
     ) -> list[Type[PromptField]]:
         """Classes of fields in the row"""
-        return [TargetConcept]
+        return [_TargetConcept]
 
 
-class TargetMeaningMnemonicRow(PromptRow):
+class _TargetMeaningMnemonicRow(PromptRow):
     @property
     def field_classes(
         self,
     ) -> list[Type[PromptField]]:
         """Classes of fields in the row"""
-        return [TargetMeaningMnemonic]
+        return [_TargetMeaningMnemonic]
 
 
 # =============
 # PromptSection
 # =============
-class ComponentSounds(PromptSection):
+class _TargetSection(PromptSection):
     @property
     def field_row_class(self) -> Type[PromptRow]:
         """Classes of the field row composing the section."""
-        return Component
-
-    @property
-    def n_repeat(self) -> int:
-        return 4
-
-    @property
-    def ui_name(self) -> int:
-        return "component"
-
-    @property
-    def prompt_name(self) -> int:
-        return "component"
-
-    @property
-    def _section_explanation_header(self) -> str:
-        return (
-            "The overall reading of the concept is composed into components ('voyage'"
-            " → []りょ,こ]). Each of them becomes an association of a concept, details"
-            " about that concept, and a sound."
-        )
-
-
-class TargetSection(PromptSection):
-    @property
-    def field_row_class(self) -> Type[PromptRow]:
-        """Classes of the field row composing the section."""
-        return TargetConceptRow
+        return _TargetConceptRow
 
     @property
     def n_repeat(self) -> int:
@@ -196,11 +169,11 @@ class TargetSection(PromptSection):
         )
 
 
-class TargetMeaningMnemonicSection(PromptSection):
+class _TargetMeaningMnemonicSection(PromptSection):
     @property
     def field_row_class(self) -> Type[PromptRow]:
         """Classes of the field row composing the section."""
-        return TargetMeaningMnemonicRow
+        return _TargetMeaningMnemonicRow
 
     @property
     def n_repeat(self) -> int:
@@ -219,13 +192,40 @@ class TargetMeaningMnemonicSection(PromptSection):
         return ""
 
 
+class _ComponentSounds(PromptSection):
+    @property
+    def field_row_class(self) -> Type[PromptRow]:
+        """Classes of the field row composing the section."""
+        return _Component
+
+    @property
+    def n_repeat(self) -> int:
+        return 4
+
+    @property
+    def ui_name(self) -> int:
+        return "component sounds"
+
+    @property
+    def prompt_name(self) -> int:
+        return "components"
+
+    @property
+    def _section_explanation_header(self) -> str:
+        return (
+            "The overall reading of the concept is composed into components ('voyage'"
+            " → []りょ,こ]). Each of them becomes an association of a concept, details"
+            " about that concept, and a sound."
+        )
+
+
 # ================
 # PromptFieldsData
 # ================
 class SoundTargetComponents(PromptFieldsData):
     @property
     def field_section_classes(self) -> list[Type[PromptSection]]:
-        return [TargetSection, TargetMeaningMnemonicSection, ComponentSounds]
+        return [_TargetSection, _TargetMeaningMnemonicSection, _ComponentSounds]
 
     @property
     def ui_name(self) -> str:
@@ -233,10 +233,49 @@ class SoundTargetComponents(PromptFieldsData):
         return "Sound Target Components"
 
     @property
+    def template_name(self) -> str:
+        """Name of the jinja template (= folder name in '/template')"""
+        return "reading_mnem"
+
+    @property
+    def template_version(self) -> int:
+        """Version of the jinja template (= number in '{number}.jinja')"""
+        return 0
+
+    @property
     def _mnem_explanation_header(self):
         return "TO ADD (overall explanation header)"
 
 
+# TODO: remove
+# =====
+# Tests
+# =====
 if __name__ == "__main__":
+    # Sound component explanation
     stc = SoundTargetComponents()
     print(stc.full_mnem_explanation)
+    # Sound component to dict
+    __import__("pprint").pp(
+        stc.to_dict(drop_empty_rows=False, raise_when_empty_value_remains=False)
+    )
+    print(stc.value)
+    # Filling in the TargetSection
+    stc.value["target_concept"].value[0].value["target_concept"].value = "a"
+    stc.value["target_meaning_mnemonic"].value[0].value[
+        "target_meaning_mnemonic"
+    ].value = "b"
+    stc.value["components"].value[0].value["component_concept"].value = "c1"
+    stc.value["components"].value[0].value["component_concept_details"].value = "c2"
+    stc.value["components"].value[0].value["component_sound"].value = "c3"
+    stc.value["components"].value[2].value["component_concept"].value = "d1"
+    stc.value["components"].value[2].value["component_concept_details"].value = "d2"
+    stc.value["components"].value[2].value["component_sound"].value = "d3"
+    __import__("pprint").pp(
+        stc.to_dict(drop_empty_rows=True, raise_when_empty_value_remains=True)
+    )
+    # Sound component to dict
+    __import__("pprint").pp(stc.to_dict())
+    # Render
+    print(stc.get_1d_prompt_section_names())
+    print(stc.get_prompt())
