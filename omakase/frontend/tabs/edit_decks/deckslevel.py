@@ -13,7 +13,7 @@ data/state. Notifications are sent to two groups of subscribers:
 - A Mediator, whose role is to update other relevant data (expected chain reaction)
 - UI components, that will usually refresh upon changes in data
 
-Uppon modification of a data point, two actions happen
+Uppon modification of a data point, two actions happen:
 
            notify  ┌────────────┐  modify
     data ─────────►│DataMediator│ ───────► other data
@@ -40,13 +40,7 @@ from omakase.backend.decks import (
     filter_label_obj_corr,
     get_card_property_names,
 )
-from omakase.backend.mnemonics.base import (
-    MnemConf,
-    MnemonicNoteFieldMapData,
-    get_str_field_names,
-    tc_mnem_conf,
-    tc_revision_mnem_conf,
-)
+from omakase.backend.mnemonics.base import MnemConf, MnemonicNoteFieldMapData
 from omakase.backend.om_user import DeckFilterCorrObl, LastSelectedDeckObl
 from omakase.exceptions import display_exception
 from omakase.frontend.tabs.edit_decks.cardlevel import CardEditor
@@ -64,8 +58,6 @@ from omakase.om_logging import logger
 # Constants
 # =========
 _AVAILABLE_DECK_FILTERS = DeckFilters()
-_AVAILABLE_MNEMONICS: list[MnemConf] = [tc_mnem_conf, tc_revision_mnem_conf]
-_DEFAULT_MNEM_NAME = _AVAILABLE_MNEMONICS[0].ui_label
 
 
 # ============
@@ -374,7 +366,7 @@ class EditDeckTabContent(TabContent):
             on_change=lambda e, deck_name=deck_name: self._actions_on_filter_selection(
                 filter_name=e.value, deck_name=deck_name
             ),
-        ).bind_value(target_object=filter_name_dp, target_name="value",).props("inline")
+        ).bind_value(target_object=filter_name_dp, target_name="value").props("inline")
 
     def __actions_on_filter_selection(
         self, filter_name: str, deck_name: DeckName
@@ -662,7 +654,7 @@ class __FieldEditor:
         )
         ui.markdown("### Pre-fill from *(optional)*")
         prompt_param_class = self._available_mnemn_by_name[mnem_name].prompt_param_class
-        str_prompt_field_names = get_str_field_names(
+        str_prompt_field_names = get_1d_prompt_section_names(
             prompt_params_class=prompt_param_class
         )
         for prompt_param_name in str_prompt_field_names:
@@ -746,9 +738,11 @@ class _CardEditorWrapper(Observer):
         if self._current_card_idx_obl.value is None:
             return
         # TODO: prendre la carte, et générer le CardEditor
-        card = self._get_card()
+        card_obl = self._get_card()
         # The card_editor UI lives only here
-        card_editor = CardEditor(card=card, deck_manipulator=self._deck_manipulator)
+        card_editor = CardEditor(
+            card_obl=card_obl, deck_manipulator=self._deck_manipulator
+        )
         card_editor.display()
 
     def update(self, observable: Observable) -> None:
@@ -766,11 +760,3 @@ class _CardEditorWrapper(Observer):
             )
             display_exception()
         return card
-
-
-class GenerationInterface:
-    def __init__(self, mnem_name: MnemonicUiLabel) -> None:
-        pass
-
-    def display(self) -> None:
-        pass

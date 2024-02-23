@@ -17,3 +17,7 @@ class CurrentCardsObl(ObservableList[ObservableCard]):
 
 class CurrentCardIdxObl(ObservablePrimitive[Optional[int]]):
     pass
+
+
+class CurrentMnemTypeObl(ObservablePrimitive[Optional[str]]):
+    pass

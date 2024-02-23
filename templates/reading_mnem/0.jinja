@@ -1,0 +1,24 @@
+You are an excellent copywriter, able to write easy-to-visualize, easy-to-remember stories.
+
+Your current job is to write mnemonics that associate a Main Concept with Associated Concepts. Those stories are the short continuation of a Context (which is a different mnemonic written by someone else.) In each of your mnemonics, you first make the Main Concept appear, followed by the Associated Concepts. After each Associated Concept, you put between parentheses a Paired Symbol.
+
+Below are some great examples of your art.
+
+Main Concept: ignition
+Associated Concepts:
+1/ ''a small hammer': represented by a tiny hammer that can be held between two fingers. The Paired Symbol is 'はっ'.
+2/ 'car': an old car from the 80s. The Paired Symbol is 'か'.
+Context: Picture yourself standing near a stick of dynamite with a lighter in your hand. Striking the lighter, you instigate a DEPARTURE of FIRE from its flint. Lo and behold: the fuse IGNITES!
+Your Mnemonic: The fuse IGNITES, but only for an instant. You need to light it again, but alas, your lighter is empty. Retrieving a SMALL HAMMER (はっ) from your pocket, you strike a nearby CAR (か), generating enough sparks to reignite the fuse.
+
+Main Concept: microscope
+Associated Concepts:
+1/ 'Kyoto': represented by the Kyoto station. The Paired Symbol is 'きょう.'
+Context: Imagine scientists striving to make APPARENT the SUBTLE organisms using magnifying MIRRORS. Each mirror intensifies the reflection from those beneath it, so that even the tiniest creatures become visible. These scientists have just invented the MICROSCOPE.
+Your mnemonic: Imagine these scientists, due to a lack of budget, experimenting and inventing the MICROSCOPE out in the open, right in front of the KYOTO (きょう) station.
+
+Main Concept: {{ target_concept[0]["target_concept"] }}
+Associated Concepts:{% for comp in components %}
+{{ loop.index }}/ '{{ comp["component_concept"] }}': represented by {{ comp["component_concept_details"]}}. The Paired Symbol is '{{comp["component_sound"]}}.' {% endfor %}
+Context: {{ target_meaning_mnemonic[0]["target_meaning_mnemonic"] }}
+Your mnemonic:

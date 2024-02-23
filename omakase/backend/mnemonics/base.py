@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, fields
-from typing import Annotated, Any, Literal, Optional, Type, Union, get_args, get_origin
+from typing import Annotated, Any, Literal, Optional, Type, Union
 
 from jinja2 import Template
 
@@ -472,20 +472,6 @@ class PromptParams:
         return error_msg.format(field_name=field_name)
 
 
-# def get_prompt_str_field_names(
-#     prompt_params_class: Type[PromptParams],
-# ) -> list[PromptParamName]:
-#     """Return all str fields of the prompt"""
-#     out_field_names = []
-#     for f in fields(prompt_params_class):
-#         if f.type == str:
-#             out_field_names.append(f.name)
-#         elif get_origin(f.type) is Annotated:
-#             if get_args(f.type)[0] == str:
-#                 out_field_names.append(f.name)
-#     return out_field_names
-
-
 @dataclass
 class PromptParamFieldUiConf:
     ui_name: str
@@ -502,7 +488,7 @@ class MnemConf:
     prompt_param_field_ui_descr: dict[PromptParamName, PromptParamFieldUiConf]
 
 
-class MnemonicNoteFieldMapData:
+class MnemonicNoteFieldMapData(Observable):
     def __init__(
         self,
         prompt_params_class: Type[PromptFieldsData],
@@ -555,6 +541,7 @@ class MnemonicNoteFieldMapData:
             root_keys=self._assocs_root_keys,
             subject_key=GENOUT_NOTE_ASSOCS_KEY,
             default_value=None,
+            on_change=self.notify,
         )
         return dp
 
@@ -567,6 +554,7 @@ class MnemonicNoteFieldMapData:
             root_keys=self._assocs_root_keys + [PROMPT_NOTE_ASSOCS_KEY],
             subject_key=prompt_param_name,
             default_value=None,
+            on_change=self.notify,
         )
         return dp
 

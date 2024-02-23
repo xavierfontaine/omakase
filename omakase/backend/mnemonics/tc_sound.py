@@ -222,7 +222,7 @@ class _ComponentSounds(PromptSection):
 # ================
 # PromptFieldsData
 # ================
-class SoundTargetComponents(PromptFieldsData):
+class SoundTargetComponentsData(PromptFieldsData):
     @property
     def field_section_classes(self) -> list[Type[PromptSection]]:
         return [_TargetSection, _TargetMeaningMnemonicSection, _ComponentSounds]
@@ -253,7 +253,7 @@ class SoundTargetComponents(PromptFieldsData):
 # =====
 if __name__ == "__main__":
     # Sound component explanation
-    stc = SoundTargetComponents()
+    stc = SoundTargetComponentsData()
     print(stc.full_mnem_explanation)
     # Sound component to dict
     __import__("pprint").pp(
