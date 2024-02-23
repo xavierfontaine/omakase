@@ -498,8 +498,11 @@ class MnemonicNoteFieldMapData(Observable):
     ):
         """OM user data mapping mnemonic fields (prompt, output) to the note fields
 
+        To be specific, link a prompt section to a note field. Consider only prompt
+        sections containing one row of one parameter.
+
         At instanciation, retrieve the associations between the `note_type` and the
-        `prompt_params` type from the om user data.
+        `prompt_section_name` type from the om user data.
         1. If the data do not exist yet, initialize the storage.
         2. If the data are not empty, clean up the existing associations, so as to adapt
         to potential changes in prompt parameters or note field names.
@@ -522,7 +525,7 @@ class MnemonicNoteFieldMapData(Observable):
         self._assocs_root_keys = [  # Root keys to all associations
             MNEM_NOTE_ASSOCS_KEY,
             note_type,
-            prompt_params_class.__qualname__,
+            self._prompt_params_class.__qualname__,
         ]
         self._prompt_note_assocs: dict[
             PromptParamName, Optional[NoteFieldName]
@@ -532,7 +535,7 @@ class MnemonicNoteFieldMapData(Observable):
 
     def genout_is_associated_to_note_field(self) -> bool:
         """Is the generation output associated to an (existing) note field?"""
-        return self.genout_note_assocs in self._note_field_names
+        return self.point_to_genout_note_field_dp().value in self._note_field_names
 
     def point_to_genout_note_field_dp(self) -> CachedUserDataPoint:
         # TODO docstr
@@ -546,13 +549,13 @@ class MnemonicNoteFieldMapData(Observable):
         return dp
 
     def point_to_prompt_note_assoc_dp(
-        self, prompt_param_name: str
+        self, section_prompt_name: str
     ) -> CachedUserDataPoint:
         # TODO docstr
         dp = CachedUserDataPoint(
             om_username=self._om_username,
             root_keys=self._assocs_root_keys + [PROMPT_NOTE_ASSOCS_KEY],
-            subject_key=prompt_param_name,
+            subject_key=section_prompt_name,
             default_value=None,
             on_change=self.notify,
         )
@@ -574,9 +577,11 @@ class MnemonicNoteFieldMapData(Observable):
         prompt_data_instance = self._prompt_params_class()
         str_prompt_param_names = prompt_data_instance.get_1d_prompt_section_names()
         # check for existing prompt param names that exist in user data but shouldn't
+        keys_to_del = []
         for prompt_param in self._prompt_note_assocs.keys():
             if prompt_param not in str_prompt_param_names:
-                del self._prompt_note_assocs[prompt_param]
+                keys_to_del.append(prompt_param)
+        [self._prompt_note_assocs.pop(prompt_param) for prompt_param in keys_to_del]
         # check for existing prompt param associated to an imaginary NoteFieldName
         for prompt_param in self._prompt_note_assocs.keys():
             if self._prompt_note_assocs[prompt_param] not in (

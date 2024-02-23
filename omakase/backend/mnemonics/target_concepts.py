@@ -99,29 +99,6 @@ class _Section1(PromptSection):
         return "mocksection1"
 
 
-class _TargetMeaningMnemonicSection(PromptSection):
-    @property
-    def field_row_class(self) -> Type[PromptRow]:
-        """Classes of the field row composing the section."""
-        return _TargetMeaningMnemonicRow
-
-    @property
-    def n_repeat(self) -> int:
-        return 1
-
-    @property
-    def ui_name(self) -> int:
-        return "target meaning mnemonic"
-
-    @property
-    def prompt_name(self) -> int:
-        return "target_meaning_mnemonic"
-
-    @property
-    def _section_explanation_header(self) -> str:
-        return ""
-
-
 class _Section2(PromptSection):
     @property
     def field_row_class(self) -> Type[PromptRow]:
