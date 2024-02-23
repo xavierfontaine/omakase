@@ -7,9 +7,9 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-nicegui = "^1.4.6"
+nicegui = "^1.4.14"
 pandas = "^2.1.4"
-fastapi = "^0.105.0"
+fastapi = "^0.109.0"
 loguru = "^0.7.2"
 anki = "^23.12.1"
 beartype = "^0.17.0"
