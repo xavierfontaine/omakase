@@ -208,11 +208,11 @@ class _MnemNoteFieldAssociator:
                 target_name="value",
             )
         ui.markdown("### Pre-fill... *(optional)*")
-        one_d_prompt_field_names = prompt_param_inst.get_1d_prompt_section_names()
-        for prompt_param_name in one_d_prompt_field_names:
+        one_d_prompt_section_names = prompt_param_inst.get_1d_prompt_section_names()
+        for prompt_section_name in one_d_prompt_section_names:
             with ui.row():
                 prompt_param_ui_name = prompt_param_inst.value[
-                    prompt_param_name
+                    prompt_section_name
                 ].ui_name
                 ui.markdown(f"`mnemonic field {prompt_param_ui_name}` from note field ")
                 ui.space()
@@ -220,7 +220,7 @@ class _MnemNoteFieldAssociator:
                     options=[None] + note_field_names,
                 ).bind_value(
                     target_object=mnem_note_field_map.point_to_prompt_note_assoc_dp(  # noqa: E501
-                        prompt_param_name=prompt_param_name
+                        section_prompt_name=prompt_section_name
                     ),
                     target_name="value",
                 )
@@ -239,10 +239,6 @@ class _MnemNoteFieldAssociator:
             om_username=om_username,
         )
         return nf_map
-
-    # TODO: remove if indeed no need to have refreshable
-    # def update(self, observable: Observable) -> None:
-    #     self.display.refresh()
 
 
 class _GenerationButton:
@@ -292,7 +288,7 @@ class _GenerationButton:
 
 
 class _Generator:
-    """Generate mnemonics"""
+    """Configure mnemonic components and generate mnemonics"""
 
     def __init__(
         self,
@@ -304,6 +300,7 @@ class _Generator:
         self._current_mnem_type_obl = current_mnem_type_obl
         self._mnem_note_field_map = mnem_note_field_map
         self._card_obl = card_obl
+        self._om_username: str = point_to_web_user_data().get(OM_USERNAME_KEY)
 
     def display(self) -> None:
         """Display the card editor given a card"""
@@ -325,7 +322,16 @@ class _Generator:
             ui.separator()
             ui.markdown(prompt_param_data.full_mnem_explanation)
 
+    # async def _test_async_outer(self) -> None:
+    #     await self._test_async_inner()
+    #
+    # async def _test_async_inner(self) -> None:
+    #     await asyncio.sleep(3)
+    #     ui.notify("Coucou!")
+    #     print("Coucou!")
+
     def _display_row(self, row: PromptRow, section_prompt_name: str) -> None:
+        """Display one PromptRow"""
         # Get the prefill
         # (Reminder: prompt/Note assocs work at the section level)
         associated_note_field = self._mnem_note_field_map.point_to_prompt_note_assoc_dp(
@@ -340,6 +346,9 @@ class _Generator:
                 field_data.value = prefill
                 ui.input(
                     placeholder=field_data.ui_placeholder,
+                    on_change=ft.partial(
+                        row.async_store_assoc, om_username=self._om_username
+                    ),
                 ).bind_value(
                     target_object=field_data,
                     target_name="value",

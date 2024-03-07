@@ -1,3 +1,4 @@
+import asyncio
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, fields
@@ -107,6 +108,8 @@ class PromptRow(ABC, Observable):
         # Propagate the notify method
         for field in self.value.values():
             field.notify = self.notify
+        # Initialize slot for storage task
+        self._async_storage_task: Optional[asyncio.Task] = None
 
     @property
     @abstractmethod
@@ -115,22 +118,49 @@ class PromptRow(ABC, Observable):
         pass
 
     def update_from_store(
-        self, field_pos: int, field_value: str, om_username: str
+        self, field_prompt_name: FieldPromptName, field_value: str, om_username: str
     ) -> None:
         """Get back existing associations of fields for this value of field
         `field_pos`"""
-        assoc_store = FieldRowAssocs(
+        assoc_store = PromptRowStore(
             om_username=om_username, row_class_name=self.__class__.__name__
         )
-        assoc = assoc_store.retrieve(field_pos=field_pos, field_value=field_value)
+        assoc = assoc_store.retrieve_assoc_from_field(
+            field_prompt_name=field_prompt_name, field_value=field_value
+        )
         self.value = assoc
 
-    def store_assoc(self, om_username: str):
+    async def async_store_assoc(self, om_username: str) -> None:
+        """Store the current field association
+
+        Store if defined time has passed since last `async_store_assoc` call without
+        further call to that function."""
+        # Cancel if there was an self._async_storage_task still running
+        if self._async_storage_task is not None:
+            self._async_storage_task: asyncio.Task
+            if not self._async_storage_task.done():
+                self._async_storage_task.cancel()
+        # Storage association after WAIT_TIME seconds
+        WAIT_TIME = 5
+        self._async_storage_task = asyncio.create_task(
+            self._store_assoc_after_wait(om_username=om_username, wait_time=WAIT_TIME)
+        )
+
+    async def _store_assoc_after_wait(self, om_username: str, wait_time: int) -> None:
+        await asyncio.sleep(wait_time)
+        self._store_assoc(om_username=om_username)
+
+    def _store_assoc(self, om_username: str) -> None:
         """Store the current field association"""
-        assoc_store = FieldRowAssocs(
+        assoc_store = PromptRowStore(
             om_username=om_username, row_class_name=self.__class__.__name__
         )
         assoc_store.store(field_values=self.value)
+
+    # # TODO: remove if not needed
+    # async def _sleeper(self, wait_time: int) -> None:
+    #     """Wrap `asyncio.sleep` to be able to call `.cancel()` on it"""
+    #     await asyncio.sleep(wait_time)
 
 
 class PromptSection(ABC, Observable):
@@ -341,45 +371,65 @@ class PromptFieldsData(ABC, Observable):
 # Database utils
 # ==============
 # TODO: put that in a separate module
-class FieldRowAssocs:
+class PromptRowStore:
     """Store and retrieve associations between fields of a prompt row"""
 
     def __init__(self, om_username: str, row_class_name: str) -> None:
         self._om_username = om_username
         self._row_class_name = row_class_name
 
-    def retrieve(self, field_pos: int, field_value: str) -> list[str]:
+    def retrieve_assoc_from_field(
+        self, field_prompt_name: FieldPromptName, field_value: str
+    ) -> list[str]:
         """For this `field_value` of field `field_pos`, return the row association of
         values."""
         # TODO: implement
         # BEGIN MOCK
         print(
             f"Pretending to retrieve for {self._om_username=}, {self._row_class_name},"
-            f" {field_pos=} and {field_value=}"
+            f" {field_prompt_name=} and {field_value=}"
         )
         inst: PromptRow = getattr(globals(), self._row_class_name)()
         row_len = len(inst.value)
-        if field_pos == 0 & field_value == "a":
-            field_values = ["a"] * row_len
-        elif field_pos == 1 & field_value == "b":
-            field_values = ["b"] * row_len
+        if field_prompt_name == "component_concept" & field_value == "a1":
+            field_values = ["a1"] * row_len
+        elif field_prompt_name == "component_concept" & field_value == "b1":
+            field_values = ["b1"] * row_len
+        if field_prompt_name == "component_concept_details" & field_value == "a2":
+            field_values = ["a2"] * row_len
+        elif field_prompt_name == "component_concept_details" & field_value == "b2":
+            field_values = ["b2"] * row_len
         # END MOCK
         return field_values
 
-    def store(self, field_values: list[str]) -> None:
+    def store(self, field_values: dict[FieldPromptName, PromptField]) -> None:
         """Store the current association"""
         # TODO: implement
         # BEGIN MOCK
         print(
-            f"Pretending to store for {self._om_username=} and {self._row_class_name},"
-            f" the association {field_values=}"
+            f"Pretending to store for {self._om_username=} and {self._row_class_name}."
+            f" the association:\n"
         )
+        print({k: v.value for k, v in field_values.items()})
         # END MOCK
+
+    def get_all_values_for_field(
+        self, field_prompt_name: FieldPromptName
+    ) -> list[FieldValue]:
+        # TODO implement
+        # BEGIN MOCK
+        if field_prompt_name == "component_concept":
+            values = ["a1", "a2"]
+        if field_prompt_name == "component_concept_details":
+            values = ["b1", "b2"]
+        # END MOCK
+        return values
 
 
 # ===============
 # General classes
 # ===============
+# TODO: remove? I think it's unused
 @dataclass
 class PromptParams:
     """A generic dataclass for prompt parameters.
